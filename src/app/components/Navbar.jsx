@@ -99,7 +99,7 @@ export default function Navbar() {
             <div className="hidden md:flex items-center gap-3">
               <motion.div whileHover={{ y: -2 }}>
                 <Link
-                  href="/auth/login"
+                  href="/authentication/login"
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-800 border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition"
                 >
                   <LogIn size={18} /> Login
@@ -107,7 +107,7 @@ export default function Navbar() {
               </motion.div>
               <motion.div whileHover={{ y: -2 }}>
                 <Link
-                  href="/auth/register"
+                  href="/authentication/register"
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-95 shadow"
                 >
                   <UserPlus size={18} /> Sign up
@@ -191,7 +191,7 @@ export default function Navbar() {
                 <div className="mt-3 flex items-center gap-2">
                   <motion.div whileTap={{ scale: 0.98 }} className="flex-1">
                     <Link
-                      href="/auth/login"
+                      href="/authentication/login"
                       className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-800 border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition"
                     >
                       <LogIn size={18} /> Login
@@ -199,7 +199,7 @@ export default function Navbar() {
                   </motion.div>
                   <motion.div whileTap={{ scale: 0.98 }} className="flex-1">
                     <Link
-                      href="/auth/register"
+                      href="/authentication/register"
                       className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-95 shadow"
                     >
                       <UserPlus size={18} /> Sign up
