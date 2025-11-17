@@ -1,24 +1,79 @@
-// This is a React component for your Next.js page.
-// It uses TailwindCSS for styling. You can adjust the classes to fit your design.
+// ✨ NEW: This must be a Client Component to use animations
+"use client";
+
+// ✨ NEW: Import the 'motion' component from framer-motion
+import { motion } from "framer-motion";
+
+// ✨ NEW: Define some reusable animation variants
+// This variant will be for containers that stagger their children's animations
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.2, // Time delay between each child animating in
+    },
+  },
+};
+
+// This variant will be for items that fade in and move up
+const fadeInUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeInOut" } },
+};
+
+// This variant will slide in from the left
+const slideInLeft = {
+  hidden: { opacity: 0, x: -50 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.6, ease: "easeInOut" } },
+};
+
+// This variant will slide in from the right
+const slideInRight = {
+  hidden: { opacity: 0, x: 50 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.6, ease: "easeInOut" } },
+};
+
 
 export default function AboutPage() {
   return (
     <div className="bg-white text-gray-800">
       
       {/* === 1. Hero Section === */}
-      <section className="text-center py-20 px-6 bg-gray-50">
-        <h1 className="text-4xl md:text-5xl font-bold text-blue-600 mb-4">
+      {/* ✨ NEW: Replaced <section> with <motion.section> and added variants */}
+      <motion.section 
+        className="text-center py-20 px-6 bg-gray-50"
+        variants={staggerContainer} // Use the container variant
+        initial="hidden"
+        animate="visible" // Animate on page load
+      >
+        {/* ✨ NEW: Added variants to children */}
+        <motion.h1 
+          className="text-4xl md:text-5xl font-bold text-blue-600 mb-4"
+          variants={fadeInUp} // Use the fade-in-up variant
+        >
           About Interview Mate
-        </h1>
-        <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto">
+        </motion.h1>
+        <motion.p 
+          className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto"
+          variants={fadeInUp} // Use the fade-in-up variant
+        >
           Bridging the Gap Between Ambitious Talent and Innovative Companies.
-        </p>
-      </section>
+        </motion.p>
+      </motion.section>
 
       {/* === 2. Our Mission Section === */}
-      <section className="py-16 px-6 max-w-5xl mx-auto">
+      {/* ✨ NEW: Using 'whileInView' to trigger animation on scroll */}
+      <motion.section 
+        className="py-16 px-6 max-w-5xl mx-auto"
+        initial="hidden"
+        whileInView="visible" // Triggers animation when section enters viewport
+        viewport={{ once: true, amount: 0.3 }} // Animate once, when 30% is visible
+        variants={staggerContainer} // Stagger the two children
+      >
         <div className="grid md:grid-cols-2 gap-12 items-center">
-          <div>
+          {/* ✨ NEW: Added slide-in-from-left animation */}
+          <motion.div variants={slideInLeft}>
             <h2 className="text-3xl font-bold mb-4">Our Mission</h2>
             <p className="text-lg text-gray-700 mb-4">
               Landing your dream job is more than just a good resume. It’s about
@@ -32,21 +87,26 @@ export default function AboutPage() {
               this.** We create a direct, real-time bridge, helping students
               prove their skills and recruiters find the perfect fit.
             </p>
-          </div>
-          <div>
-            {/* You can place an illustrative image here */}
-            {/* Example:  */}
+          </motion.div>
+          {/* ✨ NEW: Added slide-in-from-right animation */}
+          <motion.div variants={slideInRight}>
             <div className="bg-gray-200 h-64 rounded-lg flex items-center justify-center">
               <span className="text-gray-500">[Image: Teamwork or Connection]</span>
             </div>
-          </div>
+          </motion.div>
         </div>
-      </section>
+      </motion.section>
 
       <hr className="max-w-5xl mx-auto" />
 
       {/* === 3. What We Do (For Students & HR) === */}
-      <section className="py-16 px-6 bg-blue-50">
+      <motion.section 
+        className="py-16 px-6 bg-blue-50"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.2 }}
+        variants={fadeInUp} // The whole section fades in
+      >
         <div className="text-center max-w-4xl mx-auto mb-12">
           <h2 className="text-3xl font-bold mb-4">How We Help</h2>
           <p className="text-lg text-gray-700">
@@ -55,13 +115,24 @@ export default function AboutPage() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-          {/* For Students */}
-          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+        {/* ✨ NEW: This grid will now stagger its children (the two cards) */}
+        <motion.div 
+          className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto"
+          variants={staggerContainer} // Use stagger for the cards
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.3 }}
+        >
+          {/* ✨ NEW: Card 1 with fade-in-up animation */}
+          <motion.div 
+            className="bg-white p-6 rounded-lg shadow-md border border-gray-200"
+            variants={fadeInUp}
+          >
             <h3 className="text-2xl font-semibold text-blue-600 mb-3">
               For Students
             </h3>
             <ul className="list-disc list-inside space-y-2 text-gray-700">
+              {/* ...list items... */}
               <li>
                 **Practice Perfection:** Take demo interviews on your own time
                 to build confidence.
@@ -79,14 +150,18 @@ export default function AboutPage() {
                 actively hiring.
               </li>
             </ul>
-          </div>
+          </motion.div>
 
-          {/* For Companies */}
-          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+          {/* ✨ NEW: Card 2 with fade-in-up animation */}
+          <motion.div 
+            className="bg-white p-6 rounded-lg shadow-md border border-gray-200"
+            variants={fadeInUp}
+          >
             <h3 className="text-2xl font-semibold text-green-600 mb-3">
               For Company HR
             </h3>
             <ul className="list-disc list-inside space-y-2 text-gray-700">
+              {/* ...list items... */}
               <li>
                 **Discover Top Talent:** Move beyond resumes and see candidates
                 in action.
@@ -104,12 +179,18 @@ export default function AboutPage() {
                 before they even graduate.
               </li>
             </ul>
-          </div>
-        </div>
-      </section>
+          </motion.div>
+        </motion.div>
+      </motion.section>
 
       {/* === 4. Our Technology Section === */}
-      <section className="py-16 px-6 max-w-5xl mx-auto text-center">
+      <motion.section 
+        className="py-16 px-6 max-w-5xl mx-auto text-center"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.3 }}
+        variants={fadeInUp} // Section fades in
+      >
         <h2 className="text-3xl font-bold mb-4">Our Technology</h2>
         <p className="text-lg text-gray-700 max-w-3xl mx-auto">
           We believe in a seamless experience. Our platform is built using
@@ -118,10 +199,16 @@ export default function AboutPage() {
           real-time video connection so you can focus on the conversation, not
           the connection quality.
         </p>
-      </section>
+      </motion.section>
 
       {/* === 5. Call to Action (CTA) Section === */}
-      <section className="bg-blue-600 text-white py-20 px-6 text-center">
+      <motion.section 
+        className="bg-blue-600 text-white py-20 px-6 text-center"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.3 }}
+        variants={fadeInUp} // Section fades in
+      >
         <h2 className="text-3xl font-bold mb-6">
           Ready to Take the Next Step?
         </h2>
@@ -130,20 +217,28 @@ export default function AboutPage() {
           looking for the next great hire, your journey starts here.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <a
+          
+          {/* ✨ NEW: Added hover animation to the button */}
+          <motion.a
             href="/register/student"
             className="bg-white text-blue-600 font-semibold py-3 px-8 rounded-lg shadow-lg hover:bg-gray-100 transition duration-300"
+            whileHover={{ scale: 1.05 }} // Scales up on hover
+            whileTap={{ scale: 0.95 }} // Scales down on click
           >
             Sign Up as a Student
-          </a>
-          <a
+          </motion.a>
+          
+          {/* ✨ NEW: Added hover animation to the button */}
+          <motion.a
             href="/register/company"
             className="bg-gray-800 text-white font-semibold py-3 px-8 rounded-lg shadow-lg hover:bg-gray-700 transition duration-300"
+            whileHover={{ scale: 1.05 }} // Scales up on hover
+            whileTap={{ scale: 0.95 }} // Scales down on click
           >
             Register as a Company
-          </a>
+          </motion.a>
         </div>
-      </section>
+      </motion.section>
     </div>
   );
 }

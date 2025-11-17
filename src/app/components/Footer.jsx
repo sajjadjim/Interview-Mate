@@ -27,8 +27,8 @@ export default function Footer() {
           {/* Columns */}
           <div className="lg:col-span-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-8">
             <FooterCol title="Products" links={[
-              ["Outsource tech interviews", "#"],
-              ["Practice mock interviews", "#"],
+              ["Outsource tech interviews", "components/footer_components/products/outsource_tech_interviews"],
+              ["Practice mock questions", "components/footer_components/products/practice_mock_question"],
             ]} />
             <FooterCol title="Solutions" links={[
               ["Product enterprises", "#"],
@@ -46,15 +46,15 @@ export default function Footer() {
             ]} />
             <FooterCol title="Company" links={[
               ["Why Intervue?", "#"],
-              ["Pricing", "#"],
-              ["Contact us", "#"],
+              ["Pricing", "components/footer_components/company/pricing"],
+              ["Contact us", "contact"],
             ]} />
-            <FooterCol title="Compare" links={[
+            {/* <FooterCol title="Compare" links={[
               ["Vs Karat", "#"],
               ["Vs Incruiter", "#"],
               ["Vs Interviewvector", "#"],
               ["Vs Barraiser", "#"],
-            ]} />
+            ]} /> */}
           </div>
         </div>
 
