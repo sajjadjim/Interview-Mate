@@ -16,7 +16,7 @@ export default function Home() {
             InterviewMate helps you prepare for real-world job interviews with mock sessions, feedback, and direct employer connections.
           </p>
           <a
-            href="/auth/register"
+            href="/authentication/login"
             className="bg-white text-blue-600 font-semibold px-6 py-3 rounded shadow hover:bg-gray-100"
           >
             Get Started
