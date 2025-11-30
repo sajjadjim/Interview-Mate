@@ -1,226 +1,212 @@
-// This must be a Client Component to use state and effects
 "use client";
 
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-// ✨ NEW: Import from 'react-icons/fa' (Font Awesome 5)
-import { 
-  FaLaptopCode,         // Replaced FaComputer
-  FaUserMd,             // Replaced FaUserDoctor
-  FaCogs,               // Replaced FaGears
-  FaChalkboardTeacher,  // Same
-  FaUserTie,            // Same
-  FaLandmark,           // Replaced FaBuildingColumns
-  FaArrowLeft           // Same
-} from 'react-icons/fa'; // ✨ CHANGED from 'fa6'
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import LoadingSpinner from "../components/ui/LoadingSpinner";
 
-// --- (Mock Data) ---
-const categories = [
-  { 
-    name: 'IT & Software', 
-    slug: 'it',
-    icon: <FaLaptopCode />, // ✨ UPDATED
-    jobCount: 72 
-  },
-  { 
-    name: 'Medical & Health', 
-    slug: 'medical',
-    icon: <FaUserMd />,     // ✨ UPDATED
-    jobCount: 45 
-  },
-  { 
-    name: 'Technical & Engineering', 
-    slug: 'technical',
-    icon: <FaCogs />,       // ✨ UPDATED
-    jobCount: 58 
-  },
-  { 
-    name: 'Teaching & Education', 
-    slug: 'teaching',
-    icon: <FaChalkboardTeacher />, 
-    jobCount: 31 
-  },
-  { 
-    name: 'Professional Services', 
-    slug: 'professional',
-    icon: <FaUserTie />, 
-    jobCount: 88 
-  },
-  { 
-    name: 'Banking & Finance', 
-    slug: 'finance',
-    icon: <FaLandmark />,   // ✨ UPDATED
-    jobCount: 62 
-  },
-];
 
-// This is a MOCK function to simulate fetching data
-// Replace this with your actual API call to Node.js
-const fetchJobsFromAPI = async (categorySlug) => {
-  console.log(`Fetching jobs for category: ${categorySlug}`);
-  
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 750));
-  
-  // Returning mock data for the demo
-  return [
-    { id: 1, title: 'Senior React Developer', company: 'TechCorp', location: 'Remote' },
-    { id: 2, title: 'Node.js Backend Engineer', company: 'ServerSide Inc.', location: 'Dhaka' },
-    { id: 3, title: 'DevOps Specialist', company: 'CloudBase', location: 'Remote' },
-  ].filter(() => categorySlug === 'it'); // Only show for IT demo
-};
+const PAGE_SIZE = 30;
 
-// --- Animation Variants for Framer Motion ---
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1 }
-  }
-};
-
-const cardVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
-};
-
-// --- The Page Component ---
 export default function JobsPage() {
-  const [selectedCategory, setSelectedCategory] = useState(null);
   const [jobs, setJobs] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [selectedSector, setSelectedSector] = useState("all");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
 
-  const handleCategoryClick = async (category) => {
-    setSelectedCategory(category);
-    setIsLoading(true);
-    
-    // Fetch jobs from your Node.js backend
-    const fetchedJobs = await fetchJobsFromAPI(category.slug);
-    
-    setJobs(fetchedJobs);
-    setIsLoading(false);
-  };
+  useEffect(() => {
+    async function fetchJobs() {
+      setLoading(true);
 
-  const handleBackToCategories = () => {
-    setSelectedCategory(null);
-    setJobs([]);
-  };
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("limit", String(PAGE_SIZE));
+      if (selectedSector !== "all") {
+        params.set("sector", selectedSector);
+      }
 
-  // === View 1: Show Job Categories ===
-  const renderCategoryView = () => (
-    <motion.div
-      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-    >
-      {categories.map((category) => (
-        <motion.div
-          key={category.slug}
-          className="bg-white p-6 rounded-lg shadow-lg text-center cursor-pointer
-                     transition-all duration-300 hover:shadow-xl hover:scale-105"
-          onClick={() => handleCategoryClick(category)}
-          variants={cardVariants}
-        >
-          <div className="text-blue-600 text-5xl mx-auto mb-4">
-            {category.icon}
-          </div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-1">
-            {category.name}
-          </h3>
-          <p className="text-gray-500">
-            {category.jobCount} open positions
-          </p>
-        </motion.div>
-      ))}
-    </motion.div>
-  );
+      const res = await fetch(`/api/jobs?${params.toString()}`);
+      const data = await res.json();
 
-  // === View 2: Show Job Listings for a Category ===
-  const renderJobListView = () => (
-    <div>
-      {/* --- Back Button --- */}
-      <button
-        onClick={handleBackToCategories}
-        className="flex items-center gap-2 text-blue-600 font-semibold mb-6
-                   hover:text-blue-800 transition-colors"
-      >
-        <FaArrowLeft />
-        Back to Categories
-      </button>
+      setJobs(data.jobs || []);
+      setTotal(data.total || 0);
+      setTotalPages(data.totalPages || 1);
+      setLoading(false);
+    }
 
-      <h2 className="text-3xl font-bold mb-6">
-        Showing jobs for: {selectedCategory.name}
-      </h2>
+    fetchJobs();
+  }, [selectedSector, page]);
 
-      {/* --- Loading Spinner (Optional but recommended) --- */}
-      {isLoading && (
-        <div className="text-center py-10">
-          <p className="text-lg">Loading jobs...</p>
-        </div>
-      )}
+  const sectors = useMemo(() => {
+    const s = new Set(jobs.map((job) => job.sector).filter(Boolean));
+    return ["all", ...Array.from(s)];
+  }, [jobs]);
 
-      {/* --- Job List --- */}
-      {!isLoading && jobs.length > 0 && (
-        <div className="space-y-4">
-          {jobs.map((job) => (
-            <motion.div
-              key={job.id}
-              className="bg-white p-5 rounded-lg shadow-md border border-gray-200
-                         flex flex-col sm:flex-row justify-between sm:items-center"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.4 }}
-            >
-              <div>
-                <h3 className="text-xl font-semibold text-blue-700">{job.title}</h3>
-                <p className="text-gray-600">{job.company}</p>
-                <p className="text-gray-500 text-sm mt-1">{job.location}</p>
-              </div>
-              <a
-                href={`/jobs/${job.id}`} // Link to the specific job details page
-                className="bg-blue-600 text-white font-semibold py-2 px-5 
-                           rounded-lg shadow hover:bg-blue-700 transition-colors
-                           mt-4 sm:mt-0"
-              >
-                View Details
-              </a>
-            </motion.div>
-          ))}
-        </div>
-      )}
+  const canPrev = page > 1;
+  const canNext = page < totalPages;
 
-      {/* --- No Jobs Found --- */}
-      {!isLoading && jobs.length === 0 && (
-        <div className="text-center py-10 bg-gray-50 rounded-lg">
-          <h3 className="text-2xl font-semibold text-gray-700">No Jobs Found</h3>
-          <p className="text-gray-500 mt-2">
-            There are currently no open positions for {selectedCategory.name}.
-          </p>
-        </div>
-      )}
-    </div>
-  );
+  function handleSectorChange(e) {
+    setSelectedSector(e.target.value);
+    setPage(1);
+  }
 
-  // --- Main Render ---
   return (
-    <div className="bg-gray-50 min-h-screen">
-      
-      {/* === 1. Hero Section === */}
-      <section className="text-center py-20 px-6 bg-white shadow-sm">
-        <h1 className="text-4xl md:text-5xl font-bold text-blue-600 mb-4">
-          Find Your Next Opportunity
-        </h1>
-        <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto">
-          Browse open positions across all industries and find your perfect fit.
-        </p>
-      </section>
-      
-      {/* === 2. Main Content (Categories or Job List) === */}
-      <section className="py-16 px-6 max-w-6xl mx-auto">
-        {selectedCategory ? renderJobListView() : renderCategoryView()}
-      </section>
+    <main className="max-w-6xl mx-auto px-4 py-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-3xl font-bold mb-1">Latest Jobs</h1>
+          <p className="text-gray-600 text-sm">
+            Showing page {page} of {totalPages} ({total} jobs)
+          </p>
+        </div>
 
-    </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">Sector:</label>
+          <select
+            value={selectedSector}
+            onChange={handleSectorChange}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
+          >
+            {sectors.map((sector) => (
+              <option key={sector} value={sector}>
+                {sector === "all" ? "All sectors" : sector}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Spinner while loading */}
+      {loading && (
+        <div className="flex justify-center py-10">
+          <LoadingSpinner size="lg" label="Loading jobs..." />
+        </div>
+      )}
+
+      {!loading && jobs.length === 0 && (
+        <p className="text-gray-500">No jobs found for this sector.</p>
+      )}
+
+      {/* Cards grid */}
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 mb-8">
+        {jobs.map((job) => {
+          const {
+            _id,
+            id,
+            title,
+            company,
+            companyLogo,
+            logoUrl,
+            sector,
+            type,
+            location,
+            salary,
+            postedDate,
+          } = job;
+
+          const jobIdForUrl = id || _id;
+          const logo = logoUrl || companyLogo || null;
+
+          return (
+            <Link
+              key={_id}
+              href={`/jobs/${jobIdForUrl}`}
+              className="group border border-gray-200 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col overflow-hidden"
+            >
+              <div className="flex items-center gap-3 px-4 pt-4">
+                {logo ? (
+                  <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex-shrink-0">
+                    <Image
+                      src={logo}
+                      alt={company || "Company logo"}
+                      fill
+                      className="object-contain p-1"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-semibold text-indigo-700 flex-shrink-0">
+                    {(company || "?").charAt(0)}
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-400">
+                    {sector || "General"}
+                  </p>
+                  <h2 className="text-base font-semibold leading-snug">
+                    {title}
+                  </h2>
+                  <p className="text-xs text-gray-600">{company}</p>
+                </div>
+              </div>
+
+              <div className="px-4 mt-3 flex flex-wrap gap-2 text-xs text-gray-600">
+                {location && (
+                  <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1">
+                    📍 {location}
+                  </span>
+                )}
+                {type && (
+                  <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1">
+                    💼 {type}
+                  </span>
+                )}
+              </div>
+
+              <div className="px-4 py-3 mt-auto flex items-center justify-between text-xs text-gray-600 border-t border-gray-100">
+                {salary && (
+                  <span>
+                    {salary.min} - {salary.max} {salary.currency}
+                  </span>
+                )}
+                {postedDate && (
+                  <span className="text-gray-400">
+                    {new Date(postedDate).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+
+              <div className="px-4 pb-3 text-xs text-indigo-600 font-medium group-hover:underline">
+                View details →
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      {!loading && totalPages > 1 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="text-xs text-gray-500">
+            Page {page} of {totalPages}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => canPrev && setPage((p) => p - 1)}
+              disabled={!canPrev}
+              className={`px-3 py-1.5 rounded-full text-sm border ${
+                canPrev
+                  ? "bg-white hover:bg-gray-50"
+                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              ← Previous
+            </button>
+            <button
+              onClick={() => canNext && setPage((p) => p + 1)}
+              disabled={!canNext}
+              className={`px-3 py-1.5 rounded-full text-sm border ${
+                canNext
+                  ? "bg-white hover:bg-gray-50"
+                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
+    </main>
   );
 }
