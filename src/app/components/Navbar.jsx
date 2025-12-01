@@ -16,6 +16,7 @@ import {
   X,
   User,
   ChevronDown,
+  Bell,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -38,18 +39,24 @@ export default function Navbar() {
 
   const { user, loading, logout } = useAuth();
 
+  // 🔔 notifications state
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+
   useEffect(() => setMounted(true), []);
+
   useEffect(() => {
-    setOpen(false);        // close drawer on route change
+    setOpen(false); // close drawer on route change
     setUserMenuOpen(false);
+    setNotifOpen(false);
   }, [pathname]);
 
   const isActive = (href) =>
     pathname === href ? "text-blue-600" : "text-gray-700";
 
   const displayName =
-    user?.displayName ||
-    (user?.email ? user.email.split("@")[0] : "User");
+    user?.displayName || (user?.email ? user.email.split("@")[0] : "User");
 
   const initials = displayName
     .split(" ")
@@ -60,6 +67,9 @@ export default function Navbar() {
 
   const avatarUrl = user?.photoURL || null;
 
+  const unreadCount = notifications.filter((n) => !n.read).length;
+  const lastFiveNotifications = notifications.slice(0, 5);
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -68,6 +78,68 @@ export default function Navbar() {
       router.push("/");
     } catch (err) {
       console.error("Logout failed:", err);
+    }
+  };
+
+  // 🔔 load notifications when user is logged in
+  useEffect(() => {
+    if (!user || loading) return;
+
+    let isMounted = true;
+
+    const fetchNotifications = async () => {
+      try {
+        setNotifLoading(true);
+        const res = await fetch(
+          `/api/notifications?email=${encodeURIComponent(user.email)}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted) {
+          setNotifications(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error("Error loading notifications:", err);
+      } finally {
+        if (isMounted) setNotifLoading(false);
+      }
+    };
+
+    fetchNotifications();
+
+    // optional: refresh every 30s
+    const interval = setInterval(fetchNotifications, 30000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [user, loading]);
+
+  // 🔔 toggle dropdown & mark all as read when opening
+  const handleToggleNotifications = async () => {
+    if (!notifOpen && user && unreadCount > 0) {
+      try {
+        await fetch("/api/notifications", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: user.email }),
+        });
+
+        // update local state
+        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      } catch (err) {
+        console.error("Failed to mark notifications as read:", err);
+      }
+    }
+
+    setNotifOpen((v) => !v);
+  };
+
+  const handleNotificationClick = (notif) => {
+    if (notif.link) {
+      router.push(notif.link);
+      setNotifOpen(false);
     }
   };
 
@@ -147,7 +219,7 @@ export default function Navbar() {
 
             {/* Desktop auth / user area */}
             <div className="hidden md:flex items-center gap-3 relative">
-              {/* While auth state loading, show nothing (or a small skeleton if you want) */}
+              {/* Not logged in */}
               {!loading && !user && (
                 <>
                   <motion.div whileHover={{ y: -2 }}>
@@ -169,74 +241,179 @@ export default function Navbar() {
                 </>
               )}
 
+              {/* Logged in user */}
               {!loading && user && (
-                <div className="relative">
-                  <button
-                    onClick={() => setUserMenuOpen((v) => !v)}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition"
-                  >
-                    <div className="relative w-8 h-8 rounded-full overflow-hidden bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700">
-                      {avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={avatarUrl}
-                          alt="User avatar"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        initials
+                <>
+                  {/* 🔔 Notification bell */}
+                  <div className="relative">
+                    <button
+                      onClick={handleToggleNotifications}
+                      className="relative inline-flex items-center justify-center rounded-full p-2 hover:bg-gray-100 text-gray-700"
+                    >
+                      <Bell
+                        size={20}
+                        className={unreadCount > 0 ? "text-blue-600" : ""}
+                      />
+                      {unreadCount > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-red-500 text-[10px] font-semibold text-white">
+                          {unreadCount > 9 ? "9+" : unreadCount}
+                        </span>
                       )}
-                    </div>
-                    <span className="text-sm font-medium text-gray-800 max-w-[120px] truncate">
-                      {displayName}
-                    </span>
-                    <ChevronDown
-                      size={16}
-                      className={`text-gray-500 transition-transform ${
-                        userMenuOpen ? "rotate-180" : ""
-                      }`}
-                    />
-                  </button>
+                    </button>
 
-                  <AnimatePresence>
-                    {userMenuOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                        transition={{ duration: 0.18 }}
-                        className="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 bg-white shadow-lg z-50 overflow-hidden"
-                      >
-                        <div className="px-3 py-2 border-b border-gray-100">
-                          <p className="text-xs text-gray-500">Signed in as</p>
-                          <p className="text-xs font-medium text-gray-800 truncate">
-                            {user.email}
-                          </p>
-                        </div>
-                        <div className="py-1 text-sm">
-                          <Link
-                            href="/dashboard"
-                            className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
-                          >
-                            <Home size={16} /> Dashboard
-                          </Link>
-                          <Link
-                            href="/profile"
-                            className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
-                          >
-                            <User size={16} /> Profile
-                          </Link>
-                          <button
-                            onClick={handleLogout}
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-left text-red-600"
-                          >
-                            <LogIn size={16} className="rotate-180" /> Logout
-                          </button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                    <AnimatePresence>
+                      {notifOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                          transition={{ duration: 0.18 }}
+                          className="absolute right-0 mt-2 w-80 rounded-lg border border-gray-200 bg-white shadow-lg z-50 overflow-hidden"
+                        >
+                          <div className="px-3 py-2 border-b border-gray-100 flex items-center justify-between">
+                            <span className="text-xs font-semibold text-gray-800">
+                              Notifications
+                            </span>
+                            <span className="text-[11px] text-gray-500">
+                              {unreadCount > 0
+                                ? `${unreadCount} new`
+                                : "All caught up"}
+                            </span>
+                          </div>
+
+                          <div className="max-h-80 overflow-y-auto">
+                            {notifLoading && (
+                              <div className="px-3 py-4 text-xs text-gray-500 flex items-center gap-2">
+                                <span className="inline-block h-4 w-4 rounded-full border-2 border-gray-300 border-t-transparent animate-spin" />
+                                Loading...
+                              </div>
+                            )}
+
+                            {!notifLoading &&
+                              lastFiveNotifications.length === 0 && (
+                                <div className="px-3 py-4 text-xs text-gray-500">
+                                  No notifications yet.
+                                </div>
+                              )}
+
+                            {!notifLoading &&
+                              lastFiveNotifications.map((notif) => (
+                                <button
+                                  key={notif._id}
+                                  onClick={() =>
+                                    handleNotificationClick(notif)
+                                  }
+                                  className={`w-full text-left px-3 py-2 text-xs border-b border-gray-100 last:border-b-0 hover:bg-gray-50 ${
+                                    notif.read
+                                      ? "text-gray-600"
+                                      : "bg-blue-50/60 text-gray-800"
+                                  }`}
+                                >
+                                  <p className="font-semibold truncate">
+                                    {notif.title}
+                                  </p>
+                                  <p className="mt-0.5 line-clamp-2">
+                                    {notif.message}
+                                  </p>
+                                  <p className="mt-1 text-[10px] text-gray-400">
+                                    {notif.createdAt
+                                      ? new Date(
+                                          notif.createdAt
+                                        ).toLocaleString()
+                                      : ""}
+                                  </p>
+                                </button>
+                              ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Avatar dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setUserMenuOpen((v) => !v)}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition"
+                    >
+                      <div className="relative w-8 h-8 rounded-full overflow-hidden bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700">
+                        {avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={avatarUrl}
+                            alt="User avatar"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          initials
+                        )}
+                      </div>
+                      <span className="text-sm font-medium text-gray-800 max-w-[120px] truncate">
+                        {displayName}
+                      </span>
+                      <ChevronDown
+                        size={16}
+                        className={`text-gray-500 transition-transform ${
+                          userMenuOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+
+                    <AnimatePresence>
+                      {userMenuOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                          transition={{ duration: 0.18 }}
+                          className="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 bg-white shadow-lg z-50 overflow-hidden"
+                        >
+                          <div className="px-3 py-2 border-b border-gray-100">
+                            <p className="text-xs text-gray-500">
+                              Signed in as
+                            </p>
+                            <p className="text-xs font-medium text-gray-800 truncate">
+                              {user.email}
+                            </p>
+                          </div>
+                          <div className="py-1 text-sm">
+                            <Link
+                              href="/dashboard"
+                              className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
+                            >
+                              <Home size={16} /> Dashboard
+                            </Link>
+                            <Link
+                              href="/profile"
+                              className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
+                            >
+                              <User size={16} /> Profile
+                            </Link>
+                            <Link
+                              href="/application"
+                              className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
+                            >
+                              <User size={16} /> Application
+                            </Link>
+                            <Link
+                              href="/applicant_tracking"
+                              className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
+                            >
+                              <User size={16} /> Applicant Tracking
+                            </Link>
+                            
+                            <button
+                              onClick={handleLogout}
+                              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-left text-red-600"
+                            >
+                              <LogIn size={16} className="rotate-180" /> Logout
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </>
               )}
             </div>
 
@@ -274,7 +451,7 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Mobile drawer */}
+        {/* Mobile drawer (unchanged from your version, no bell here for now) */}
         <AnimatePresence>
           {open && (
             <motion.div
@@ -385,6 +562,12 @@ export default function Navbar() {
                       >
                         <User size={18} /> Profile
                       </Link>
+                      {/* <Link
+                        href="/profile"
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+                      >
+                        <User size={18} /> Profile
+                      </Link> */}
                       <button
                         onClick={handleLogout}
                         className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-gray-50 text-left"

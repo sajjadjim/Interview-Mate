@@ -91,7 +91,7 @@ export default function AboutPage() {
           {/* ✨ NEW: Added slide-in-from-right animation */}
           <motion.div variants={slideInRight}>
             <div className="bg-gray-200 h-64 rounded-lg flex items-center justify-center">
-              <span className="text-gray-500">[Image: Teamwork or Connection]</span>
+              <span className="text-gray-500">[Image: Teamwork or Connection]<img alt="Teamwork or Connection" /></span>
             </div>
           </motion.div>
         </div>

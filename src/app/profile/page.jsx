@@ -4,6 +4,27 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
+import { Pencil, X } from "lucide-react";
+
+// Simple reusable modal component
+function Modal({ title, children, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b">
+          <h2 className="text-sm font-semibold text-gray-800">{title}</h2>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-full hover:bg-gray-100 text-gray-500"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div className="p-5 max-h-[75vh] overflow-y-auto">{children}</div>
+      </div>
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth();
@@ -14,6 +35,9 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // which modal is open: "candidate" | "hr" | "company" | null
+  const [activeModal, setActiveModal] = useState(null);
 
   // Candidate fields
   const [candidateData, setCandidateData] = useState({
@@ -136,6 +160,7 @@ export default function ProfilePage() {
 
       if (!res.ok) throw new Error("Failed to save candidate profile.");
       setSuccess("Profile updated successfully.");
+      setActiveModal(null);
     } catch (err) {
       console.error(err);
       setError("Failed to save profile.");
@@ -183,6 +208,7 @@ export default function ProfilePage() {
       setSuccess(
         "HR information submitted. Your status will stay inactive until verified by the team."
       );
+      setActiveModal(null);
     } catch (err) {
       console.error(err);
       setError("Failed to save HR profile.");
@@ -226,6 +252,7 @@ export default function ProfilePage() {
       setSuccess(
         "Company information submitted. Your status will stay inactive until verified by the team."
       );
+      setActiveModal(null);
     } catch (err) {
       console.error(err);
       setError("Failed to save company profile.");
@@ -244,12 +271,19 @@ export default function ProfilePage() {
     );
   }
 
+  const fullCandidateName =
+    candidateData.firstName || candidateData.lastName
+      ? `${candidateData.firstName || ""} ${candidateData.lastName || ""}`.trim()
+      : dbUser.name || dbUser.email;
+
   return (
     <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-      <header className="flex flex-col gap-1">
+      {/* Header */}
+      <header className="flex flex-col gap-1 border-b pb-4">
         <h1 className="text-2xl font-bold">Profile</h1>
         <p className="text-sm text-gray-600">
-          Role: <span className="font-semibold capitalize">{role}</span>{" "}
+          Role:{" "}
+          <span className="font-semibold capitalize">{role}</span>
           {role !== "candidate" && (
             <span className="ml-2 text-xs rounded-full px-2 py-0.5 bg-gray-100">
               Status:{" "}
@@ -266,6 +300,7 @@ export default function ProfilePage() {
         <p className="text-xs text-gray-500">Email: {dbUser.email}</p>
       </header>
 
+      {/* Global messages */}
       {error && (
         <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-md">
           {error}
@@ -277,392 +312,646 @@ export default function ProfilePage() {
         </p>
       )}
 
-      {/* Candidate form */}
+      {/* CANDIDATE VIEW CARD */}
       {role === "candidate" && (
-        <form onSubmit={saveCandidate} className="space-y-4 bg-white p-4 rounded-xl border">
-          <h2 className="text-lg font-semibold mb-1">Candidate Information</h2>
-          <p className="text-xs text-gray-500 mb-2">
-            Fields marked with * are required.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <section className="bg-white border rounded-2xl p-4 shadow-sm space-y-3">
+          <div className="flex items-center justify-between gap-2">
             <div>
-              <label className="text-sm font-medium">First Name</label>
-              <input
-                className="w-full border rounded-md px-3 py-2 text-sm"
-                value={candidateData.firstName}
-                onChange={(e) =>
-                  setCandidateData((p) => ({
-                    ...p,
-                    firstName: e.target.value,
-                  }))
-                }
-              />
+              <h2 className="text-lg font-semibold">Candidate Information</h2>
+              <p className="text-xs text-gray-500">
+                This is your public profile for interviewers.
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveModal("candidate")}
+              className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
+            >
+              <Pencil size={14} />
+              Edit
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-gray-500 text-xs">Full Name</p>
+              <p className="font-medium text-gray-900">
+                {fullCandidateName || "Not provided"}
+              </p>
             </div>
             <div>
-              <label className="text-sm font-medium">Last Name</label>
-              <input
-                className="w-full border rounded-md px-3 py-2 text-sm"
-                value={candidateData.lastName}
-                onChange={(e) =>
-                  setCandidateData((p) => ({
-                    ...p,
-                    lastName: e.target.value,
-                  }))
-                }
-              />
+              <p className="text-gray-500 text-xs">Age</p>
+              <p className="font-medium text-gray-900">
+                {candidateData.age || "Not provided"}
+              </p>
             </div>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">
-              Address <span className="text-red-500">*</span>
-            </label>
-            <input
-              className="w-full border rounded-md px-3 py-2 text-sm"
-              required
-              value={candidateData.address}
-              onChange={(e) =>
-                setCandidateData((p) => ({ ...p, address: e.target.value }))
-              }
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium">
-                Phone <span className="text-red-500">*</span>
-              </label>
-              <input
-                className="w-full border rounded-md px-3 py-2 text-sm"
-                required
-                value={candidateData.phone}
-                onChange={(e) =>
-                  setCandidateData((p) => ({ ...p, phone: e.target.value }))
-                }
-              />
+            <div className="sm:col-span-2">
+              <p className="text-gray-500 text-xs">Address</p>
+              <p className="font-medium text-gray-900">
+                {candidateData.address || "Not provided"}
+              </p>
             </div>
             <div>
-              <label className="text-sm font-medium">
-                Age <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                className="w-full border rounded-md px-3 py-2 text-sm"
-                required
-                value={candidateData.age}
-                onChange={(e) =>
-                  setCandidateData((p) => ({ ...p, age: e.target.value }))
-                }
-              />
+              <p className="text-gray-500 text-xs">Phone</p>
+              <p className="font-medium text-gray-900">
+                {candidateData.phone || "Not provided"}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs">
+                Educational Qualification
+              </p>
+              <p className="font-medium text-gray-900">
+                {candidateData.educationalQualification || "Not provided"}
+              </p>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="text-gray-500 text-xs">
+                Current Job Position (if any)
+              </p>
+              <p className="font-medium text-gray-900">
+                {candidateData.currentJobPosition || "Not provided"}
+              </p>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="text-gray-500 text-xs">Profile Image URL</p>
+              <p className="font-medium text-gray-900 break-all">
+                {candidateData.imageUrl || "Not provided"}
+              </p>
             </div>
           </div>
-
-          <div>
-            <label className="text-sm font-medium">
-              Educational Qualification
-            </label>
-            <input
-              className="w-full border rounded-md px-3 py-2 text-sm"
-              value={candidateData.educationalQualification}
-              onChange={(e) =>
-                setCandidateData((p) => ({
-                  ...p,
-                  educationalQualification: e.target.value,
-                }))
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">
-              Current Job Position (if any)
-            </label>
-            <input
-              className="w-full border rounded-md px-3 py-2 text-sm"
-              value={candidateData.currentJobPosition}
-              onChange={(e) =>
-                setCandidateData((p) => ({
-                  ...p,
-                  currentJobPosition: e.target.value,
-                }))
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">
-              Profile Image URL (optional)
-            </label>
-            <input
-              className="w-full border rounded-md px-3 py-2 text-sm"
-              value={candidateData.imageUrl}
-              onChange={(e) =>
-                setCandidateData((p) => ({ ...p, imageUrl: e.target.value }))
-              }
-            />
-            <p className="text-[11px] text-gray-400 mt-1">
-              Later you can plug this into Firebase Storage or Cloudinary.
-            </p>
-          </div>
-
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:bg-blue-300"
-          >
-            {saving ? "Saving..." : "Save profile"}
-          </button>
-        </form>
+        </section>
       )}
 
-      {/* HR form */}
+      {/* HR VIEW CARD */}
       {role === "hr" && (
-        <form onSubmit={saveHr} className="space-y-4 bg-white p-4 rounded-xl border">
-          <h2 className="text-lg font-semibold mb-1">HR Verification</h2>
-          <p className="text-xs text-gray-500 mb-2">
-            Your account status is <strong>{status}</strong>. Submit this
-            information to be verified by the team.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <section className="bg-white border rounded-2xl p-4 shadow-sm space-y-3">
+          <div className="flex items-center justify-between gap-2">
             <div>
-              <label className="text-sm font-medium">
-                Full Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                className="w-full border rounded-md px-3 py-2 text-sm"
-                value={hrData.fullName}
-                onChange={(e) =>
-                  setHrData((p) => ({ ...p, fullName: e.target.value }))
-                }
-              />
+              <h2 className="text-lg font-semibold">HR Verification</h2>
+              <p className="text-xs text-gray-500">
+                Your status:{" "}
+                <span
+                  className={
+                    status === "active" ? "text-green-600" : "text-orange-600"
+                  }
+                >
+                  {status}
+                </span>
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveModal("hr")}
+              className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
+            >
+              <Pencil size={14} />
+              Edit
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-gray-500 text-xs">Full Name</p>
+              <p className="font-medium text-gray-900">
+                {hrData.fullName || "Not provided"}
+              </p>
             </div>
             <div>
-              <label className="text-sm font-medium">
-                Age <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                className="w-full border rounded-md px-3 py-2 text-sm"
-                value={hrData.age}
-                onChange={(e) =>
-                  setHrData((p) => ({ ...p, age: e.target.value }))
-                }
-              />
+              <p className="text-gray-500 text-xs">Age</p>
+              <p className="font-medium text-gray-900">
+                {hrData.age || "Not provided"}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs">NID Number</p>
+              <p className="font-medium text-gray-900">
+                {hrData.nidNumber || "Not provided"}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs">Contact Phone</p>
+              <p className="font-medium text-gray-900">
+                {hrData.contactPhone || "Not provided"}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs">Company Name</p>
+              <p className="font-medium text-gray-900">
+                {hrData.companyName || "Not provided"}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs">Company Email</p>
+              <p className="font-medium text-gray-900">
+                {hrData.companyEmail || "Not provided"}
+              </p>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="text-gray-500 text-xs">Company Address</p>
+              <p className="font-medium text-gray-900">
+                {hrData.companyAddress || "Not provided"}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs">
+                Days in current company
+              </p>
+              <p className="font-medium text-gray-900">
+                {hrData.companyTenureDays || "Not provided"}
+              </p>
             </div>
           </div>
-
-          <div>
-            <label className="text-sm font-medium">
-              NID Number <span className="text-red-500">*</span>
-            </label>
-            <input
-              className="w-full border rounded-md px-3 py-2 text-sm"
-              value={hrData.nidNumber}
-              onChange={(e) =>
-                setHrData((p) => ({ ...p, nidNumber: e.target.value }))
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">
-              Contact Phone <span className="text-red-500">*</span>
-            </label>
-            <input
-              className="w-full border rounded-md px-3 py-2 text-sm"
-              value={hrData.contactPhone}
-              onChange={(e) =>
-                setHrData((p) => ({ ...p, contactPhone: e.target.value }))
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">
-              Company Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              className="w-full border rounded-md px-3 py-2 text-sm"
-              value={hrData.companyName}
-              onChange={(e) =>
-                setHrData((p) => ({ ...p, companyName: e.target.value }))
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">
-              Company Email <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="email"
-              className="w-full border rounded-md px-3 py-2 text-sm"
-              value={hrData.companyEmail}
-              onChange={(e) =>
-                setHrData((p) => ({ ...p, companyEmail: e.target.value }))
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">
-              Company Address <span className="text-red-500">*</span>
-            </label>
-            <input
-              className="w-full border rounded-md px-3 py-2 text-sm"
-              value={hrData.companyAddress}
-              onChange={(e) =>
-                setHrData((p) => ({ ...p, companyAddress: e.target.value }))
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">
-              How many days you are in this company?{" "}
-              <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              className="w-full border rounded-md px-3 py-2 text-sm"
-              value={hrData.companyTenureDays}
-              onChange={(e) =>
-                setHrData((p) => ({ ...p, companyTenureDays: e.target.value }))
-              }
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:bg-blue-300"
-          >
-            {saving ? "Submitting..." : "Submit verification info"}
-          </button>
-        </form>
+        </section>
       )}
 
-      {/* Company form */}
+      {/* COMPANY VIEW CARD */}
       {role === "company" && (
-        <form
-          onSubmit={saveCompany}
-          className="space-y-4 bg-white p-4 rounded-xl border"
+        <section className="bg-white border rounded-2xl p-4 shadow-sm space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold">Company Verification</h2>
+              <p className="text-xs text-gray-500">
+                Your status:{" "}
+                <span
+                  className={
+                    status === "active" ? "text-green-600" : "text-orange-600"
+                  }
+                >
+                  {status}
+                </span>
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveModal("company")}
+              className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
+            >
+              <Pencil size={14} />
+              Edit
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-gray-500 text-xs">Company Name</p>
+              <p className="font-medium text-gray-900">
+                {companyData.companyName || "Not provided"}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs">Company Email</p>
+              <p className="font-medium text-gray-900">
+                {companyData.companyEmail || "Not provided"}
+              </p>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="text-gray-500 text-xs">Company Address</p>
+              <p className="font-medium text-gray-900">
+                {companyData.companyAddress || "Not provided"}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs">Owner Name</p>
+              <p className="font-medium text-gray-900">
+                {companyData.ownerName || "Not provided"}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs">Owner Email</p>
+              <p className="font-medium text-gray-900">
+                {companyData.ownerEmail || "Not provided"}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs">Owner Phone</p>
+              <p className="font-medium text-gray-900">
+                {companyData.ownerPhone || "Not provided"}
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ---------- MODALS ---------- */}
+
+      {activeModal === "candidate" && (
+        <Modal
+          title="Update Candidate Information"
+          onClose={() => setActiveModal(null)}
         >
-          <h2 className="text-lg font-semibold mb-1">Company Verification</h2>
-          <p className="text-xs text-gray-500 mb-2">
-            Your account status is <strong>{status}</strong>. Submit company
-            information to get verified and then post jobs.
-          </p>
+          <form onSubmit={saveCandidate} className="space-y-4">
+            <p className="text-xs text-gray-500">
+              Fields marked with <span className="text-red-500">*</span> are
+              required.
+            </p>
 
-          <div>
-            <label className="text-sm font-medium">
-              Company Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              className="w-full border rounded-md px-3 py-2 text-sm"
-              value={companyData.companyName}
-              onChange={(e) =>
-                setCompanyData((p) => ({
-                  ...p,
-                  companyName: e.target.value,
-                }))
-              }
-            />
-          </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium">First Name</label>
+                <input
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  value={candidateData.firstName}
+                  onChange={(e) =>
+                    setCandidateData((p) => ({
+                      ...p,
+                      firstName: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Last Name</label>
+                <input
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  value={candidateData.lastName}
+                  onChange={(e) =>
+                    setCandidateData((p) => ({
+                      ...p,
+                      lastName: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
 
-          <div>
-            <label className="text-sm font-medium">
-              Company Address <span className="text-red-500">*</span>
-            </label>
-            <input
-              className="w-full border rounded-md px-3 py-2 text-sm"
-              value={companyData.companyAddress}
-              onChange={(e) =>
-                setCompanyData((p) => ({
-                  ...p,
-                  companyAddress: e.target.value,
-                }))
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">
-              Company Email <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="email"
-              className="w-full border rounded-md px-3 py-2 text-sm"
-              value={companyData.companyEmail}
-              onChange={(e) =>
-                setCompanyData((p) => ({
-                  ...p,
-                  companyEmail: e.target.value,
-                }))
-              }
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-sm font-medium">
-                Owner Name <span className="text-red-500">*</span>
+                Address <span className="text-red-500">*</span>
               </label>
               <input
                 className="w-full border rounded-md px-3 py-2 text-sm"
-                value={companyData.ownerName}
+                required
+                value={candidateData.address}
                 onChange={(e) =>
-                  setCompanyData((p) => ({
+                  setCandidateData((p) => ({ ...p, address: e.target.value }))
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium">
+                  Phone <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  required
+                  value={candidateData.phone}
+                  onChange={(e) =>
+                    setCandidateData((p) => ({ ...p, phone: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">
+                  Age <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  required
+                  value={candidateData.age}
+                  onChange={(e) =>
+                    setCandidateData((p) => ({ ...p, age: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">
+                Educational Qualification
+              </label>
+              <input
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={candidateData.educationalQualification}
+                onChange={(e) =>
+                  setCandidateData((p) => ({
                     ...p,
-                    ownerName: e.target.value,
+                    educationalQualification: e.target.value,
                   }))
                 }
               />
             </div>
+
             <div>
               <label className="text-sm font-medium">
-                Owner Email <span className="text-red-500">*</span>
+                Current Job Position (if any)
+              </label>
+              <input
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={candidateData.currentJobPosition}
+                onChange={(e) =>
+                  setCandidateData((p) => ({
+                    ...p,
+                    currentJobPosition: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">
+                Profile Image URL (optional)
+              </label>
+              <input
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={candidateData.imageUrl}
+                onChange={(e) =>
+                  setCandidateData((p) => ({
+                    ...p,
+                    imageUrl: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setActiveModal(null)}
+                className="px-3 py-2 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-4 py-2 text-xs rounded-md bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:bg-blue-300"
+              >
+                {saving ? "Saving..." : "Save changes"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {activeModal === "hr" && (
+        <Modal
+          title="Update HR Information"
+          onClose={() => setActiveModal(null)}
+        >
+          <form onSubmit={saveHr} className="space-y-4">
+            <p className="text-xs text-gray-500">
+              Please fill in all required HR fields.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium">
+                  Full Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  value={hrData.fullName}
+                  onChange={(e) =>
+                    setHrData((p) => ({ ...p, fullName: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">
+                  Age <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  value={hrData.age}
+                  onChange={(e) =>
+                    setHrData((p) => ({ ...p, age: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">
+                NID Number <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={hrData.nidNumber}
+                onChange={(e) =>
+                  setHrData((p) => ({ ...p, nidNumber: e.target.value }))
+                }
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">
+                Contact Phone <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={hrData.contactPhone}
+                onChange={(e) =>
+                  setHrData((p) => ({ ...p, contactPhone: e.target.value }))
+                }
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">
+                Company Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={hrData.companyName}
+                onChange={(e) =>
+                  setHrData((p) => ({ ...p, companyName: e.target.value }))
+                }
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">
+                Company Email <span className="text-red-500">*</span>
               </label>
               <input
                 type="email"
                 className="w-full border rounded-md px-3 py-2 text-sm"
-                value={companyData.ownerEmail}
+                value={hrData.companyEmail}
                 onChange={(e) =>
-                  setCompanyData((p) => ({
+                  setHrData((p) => ({ ...p, companyEmail: e.target.value }))
+                }
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">
+                Company Address <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={hrData.companyAddress}
+                onChange={(e) =>
+                  setHrData((p) => ({ ...p, companyAddress: e.target.value }))
+                }
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">
+                Days in this company <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={hrData.companyTenureDays}
+                onChange={(e) =>
+                  setHrData((p) => ({
                     ...p,
-                    ownerEmail: e.target.value,
+                    companyTenureDays: e.target.value,
                   }))
                 }
               />
             </div>
-          </div>
 
-          <div>
-            <label className="text-sm font-medium">
-              Owner Phone <span className="text-red-500">*</span>
-            </label>
-            <input
-              className="w-full border rounded-md px-3 py-2 text-sm"
-              value={companyData.ownerPhone}
-              onChange={(e) =>
-                setCompanyData((p) => ({
-                  ...p,
-                  ownerPhone: e.target.value,
-                }))
-              }
-            />
-          </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setActiveModal(null)}
+                className="px-3 py-2 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-4 py-2 text-xs rounded-md bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:bg-blue-300"
+              >
+                {saving ? "Submitting..." : "Submit verification info"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:bg-blue-300"
-          >
-            {saving ? "Submitting..." : "Submit company info"}
-          </button>
-        </form>
+      {activeModal === "company" && (
+        <Modal
+          title="Update Company Information"
+          onClose={() => setActiveModal(null)}
+        >
+          <form onSubmit={saveCompany} className="space-y-4">
+            <p className="text-xs text-gray-500">
+              Provide accurate company details to help with verification.
+            </p>
+
+            <div>
+              <label className="text-sm font-medium">
+                Company Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={companyData.companyName}
+                onChange={(e) =>
+                  setCompanyData((p) => ({
+                    ...p,
+                    companyName: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">
+                Company Address <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={companyData.companyAddress}
+                onChange={(e) =>
+                  setCompanyData((p) => ({
+                    ...p,
+                    companyAddress: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">
+                Company Email <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="email"
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={companyData.companyEmail}
+                onChange={(e) =>
+                  setCompanyData((p) => ({
+                    ...p,
+                    companyEmail: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium">
+                  Owner Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  value={companyData.ownerName}
+                  onChange={(e) =>
+                    setCompanyData((p) => ({
+                      ...p,
+                      ownerName: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">
+                  Owner Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  value={companyData.ownerEmail}
+                  onChange={(e) =>
+                    setCompanyData((p) => ({
+                      ...p,
+                      ownerEmail: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">
+                Owner Phone <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={companyData.ownerPhone}
+                onChange={(e) =>
+                  setCompanyData((p) => ({
+                    ...p,
+                    ownerPhone: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setActiveModal(null)}
+                className="px-3 py-2 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-4 py-2 text-xs rounded-md bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:bg-blue-300"
+              >
+                {saving ? "Submitting..." : "Submit company info"}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </main>
   );

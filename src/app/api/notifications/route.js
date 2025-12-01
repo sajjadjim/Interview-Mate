@@ -37,33 +37,32 @@ export async function POST(request) {
       );
     }
 
-    const normalizedTopic = TOPIC_OPTIONS.includes(topic) ? topic : "Other";
+    const normalizedTopic =
+      TOPIC_OPTIONS.includes(topic) ? topic : "Other";
 
-    // applications collection
     const applicationsCollection = await getCollection("applications");
-    // notifications collection
     const notificationsCollection = await getCollection("notifications");
 
     const doc = {
       name,
       email,
-      date, // e.g. "2025-12-01"
+      date,
       timeSlot,
       topic: normalizedTopic,
-      paymentStatus: "unpaid", // default
-      approvalStatus: "Not approved", // default
+      paymentStatus: "unpaid",
+      approvalStatus: "Not approved",
       createdAt: new Date(),
     };
 
     const result = await applicationsCollection.insertOne(doc);
 
-    // 🔔 create notification for this user
+    // Create notification for the candidate
     await notificationsCollection.insertOne({
       userEmail: email,
       title: "Application received",
       message: `Your application for ${normalizedTopic} on ${date} at ${timeSlot} has been received.`,
       type: "application",
-      link: "/applications", // they can see their applications page
+      link: "/apply",
       read: false,
       createdAt: new Date(),
     });
@@ -81,19 +80,13 @@ export async function POST(request) {
   }
 }
 
-// ✅ UPDATED: supports optional ?email= filter
-export async function GET(request) {
+// GET stays same as before
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url);
-    const email = searchParams.get("email"); // ?email=...
+    const collection = await getCollection("applications");
 
-    const applicationsCollection = await getCollection("applications");
-
-    // If email provided → filter by that email, else return all
-    const query = email ? { email } : {};
-
-    const applications = await applicationsCollection
-      .find(query)
+    const applications = await collection
+      .find({})
       .sort({ createdAt: -1 })
       .toArray();
 
