@@ -3,6 +3,8 @@
 
 // ✨ NEW: Import the 'motion' component from framer-motion
 import { motion } from "framer-motion";
+import { useEffect } from "react";
+
 
 // ✨ NEW: Define some reusable animation variants
 // This variant will be for containers that stagger their children's animations
@@ -35,9 +37,16 @@ const slideInRight = {
 };
 
 
+
 export default function AboutPage() {
+
+  useEffect(()=>{
+      document.title="About Us - Interview Mate";
+      }, []);
+
   return (
     <div className="bg-white text-gray-800">
+
       
       {/* === 1. Hero Section === */}
       {/* ✨ NEW: Replaced <section> with <motion.section> and added variants */}

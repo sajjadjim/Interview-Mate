@@ -73,12 +73,21 @@ export default function ProfilePage() {
     ownerPhone: "",
   });
 
+
+
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
       router.push("/authentication/login");
     }
   }, [authLoading, user, router]);
+
+  // Dynamic Gmail name title
+  useEffect(() => {
+    document.title = user?.email
+      ? `Profile | ${user.email} | Interview-Mate`
+      : "Profile | Interview-Mate";
+  }, [user]);
 
   // Load profile from DB
   useEffect(() => {

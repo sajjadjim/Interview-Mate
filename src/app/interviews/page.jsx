@@ -28,6 +28,10 @@ export default function InterviewsPage() {
   // Already sent candidates map: { applicationId: record }
   const [interviewByApplicationId, setInterviewByApplicationId] = useState({});
 
+  useEffect(()=>{
+    document.title="Interviews | Participants - Interview-Mate";
+  })
+
   // Load applications + current user info + existing interview candidates
   useEffect(() => {
     const load = async () => {

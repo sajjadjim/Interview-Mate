@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Mail, Phone, MapPin, Send, Loader2, MessageSquare, User, Building2, Paperclip
@@ -26,6 +26,10 @@ export default function ContactPage() {
   const [loading, setLoading] = useState(false);
   const [ok, setOk] = useState(false);
   const [err, setErr] = useState("");
+
+  useEffect(()=>{
+    document.title="Contact Us - Interview Mate";
+  }, []);
 
   async function onSubmit(e) {
     e.preventDefault();

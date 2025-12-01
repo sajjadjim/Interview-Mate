@@ -3,11 +3,14 @@
 
 import { useAuth } from "@/context/AuthContext";
 import RequireAuth from "../components/RequireAuth";
+import { useEffect } from "react";
 
 
 export default function DashboardPage() {
   const { user } = useAuth();
-
+useEffect(()=>{
+  document.title = "Dashboard";
+})
   return (
     <RequireAuth>
       <main className="max-w-4xl mx-auto px-4 py-8">

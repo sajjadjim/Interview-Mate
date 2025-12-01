@@ -15,6 +15,9 @@ export default function JobsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+useEffect(()=>{
+  document.title="Jobs - JobBoard";
+})
 
   useEffect(() => {
     async function fetchJobs() {

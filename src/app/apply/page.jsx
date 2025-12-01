@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { CalendarDays, Clock, Mail, User, Tag, CheckCircle2 } from "lucide-react";
@@ -25,6 +25,8 @@ const TOPIC_OPTIONS = [
 export default function ApplyPage() {
   const router = useRouter();
 
+  
+
   // default date = today
   const today = new Date();
   const defaultDate = today.toISOString().split("T")[0];
@@ -37,6 +39,11 @@ export default function ApplyPage() {
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [error, setError] = useState("");
+
+    useEffect(()=>{
+      document.title="Interviews | Application - Interview-Mate";
+    })
+  
 
   const handleSubmit = async (e) => {
     e.preventDefault();
