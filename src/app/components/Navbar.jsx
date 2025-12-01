@@ -23,6 +23,7 @@ const navItems = [
   { label: "Home", href: "/", Icon: Home },
   { label: "Jobs", href: "/jobs", Icon: Briefcase },
   { label: "Interviews", href: "/interviews", Icon: Video },
+  { label: "Apply", href: "/apply", Icon: Briefcase },
   { label: "About", href: "/about", Icon: Info },
   { label: "Contact", href: "/contact", Icon: Mail },
 ];

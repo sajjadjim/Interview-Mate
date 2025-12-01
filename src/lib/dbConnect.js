@@ -1,27 +1,10 @@
-// import  { MongoClient, ServerApiVersion } from 'mongodb';
-
-// export default function dbConnect (collectionName){
-// const uri = process.env.MONGODB_URI;
-// // Create a MongoClient with a MongoClientOptions object to set the Stable API version
-// const client = new MongoClient(uri, {
-//   serverApi: {
-//     version: ServerApiVersion.v1,
-//     strict: true,
-//     deprecationErrors: true,
-//   }
-// });
-// return client.db(process.env.DB_NAME).collection(collectionName);
-
-// }
-
-// src/lib/dbConnect.js
-
+// src/lib/dbConnect.js (example)
 import { MongoClient, ServerApiVersion } from "mongodb";
 
 const uri = process.env.MONGODB_URI;
-const dbName = process.env.DB_NAME;
+const dbName = process.env.DB_NAME || "interview_mate";
 
-if (!uri) throw new Error("⚠️ Missing MONGODB_URI in .env.local");
+if (!uri) throw new Error("⚠️ Missing MONGODB_URI in environment");
 
 const options = {
   serverApi: {
@@ -34,7 +17,6 @@ const options = {
 let client;
 let clientPromise;
 
-// Reuse client connection globally to prevent multiple connections
 if (process.env.NODE_ENV === "development") {
   if (!global._mongoClientPromise) {
     client = new MongoClient(uri, options);
