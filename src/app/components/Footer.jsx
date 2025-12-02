@@ -38,11 +38,11 @@ export default function Footer() {
               ["Universities/Colleges", "#"],
             ]} />
             <FooterCol title="Resources" links={[
-              ["Blogs", "#"],
-              ["Case Study", "#"],
-              ["Ebooks", "#"],
-              ["Whitepapers", "#"],
-              ["Sitemap", "#"],
+              ["Blogs", "components/footer_components/resources/blogs"],
+              ["Case Study", "components/footer_components/resources/case_study"],
+              ["Ebooks", "components/footer_components/resources/ebooks"],
+              // ["Whitepapers", "components/footer_components/resources/sitemaps"],
+              ["Sitemap", "components/footer_components/resources/sitemaps"],
             ]} />
             <FooterCol title="Company" links={[
               ["Why Intervue?", "#"],

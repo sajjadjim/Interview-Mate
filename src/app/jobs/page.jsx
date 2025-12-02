@@ -16,7 +16,7 @@ export default function JobsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 useEffect(()=>{
-  document.title="Jobs - JobBoard";
+  document.title="JobListings | InterviewMate";
 })
 
   useEffect(() => {
