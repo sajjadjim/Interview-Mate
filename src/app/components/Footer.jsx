@@ -45,7 +45,7 @@ export default function Footer() {
               ["Sitemap", "components/footer_components/resources/sitemaps"],
             ]} />
             <FooterCol title="Company" links={[
-              ["Why Intervue?", "#"],
+              ["Why Intervue?", "components/footer_components/company/why_interview"],
               ["Pricing", "components/footer_components/company/pricing"],
               ["Contact us", "contact"],
             ]} />
@@ -66,16 +66,16 @@ export default function Footer() {
           <div>
             <p className="text-white font-semibold mb-3">Follow us</p>
             <div className="flex items-center gap-4">
-              <a href="#" aria-label="LinkedIn" className="p-2 rounded border border-gray-700 hover:border-gray-400">
+              <a href="https://www.linkedin.com/feed/" aria-label="LinkedIn" className="p-2 rounded border border-gray-700 hover:border-gray-400">
                 <Linkedin size={18} />
               </a>
-              <a href="#" aria-label="Instagram" className="p-2 rounded border border-gray-700 hover:border-gray-400">
+              <a href="https://www.instagram.com/" aria-label="Instagram" className="p-2 rounded border border-gray-700 hover:border-gray-400">
                 <Instagram size={18} />
               </a>
-              <a href="#" aria-label="X" className="p-2 rounded border border-gray-700 hover:border-gray-400">
+              <a href="https://x.com/" aria-label="X" className="p-2 rounded border border-gray-700 hover:border-gray-400">
                 <XIcon />
               </a>
-              <a href="#" aria-label="Facebook" className="p-2 rounded border border-gray-700 hover:border-gray-400">
+              <a href="https://www.facebook.com/profile.php?id=61584773601008" aria-label="Facebook" className="p-2 rounded border border-gray-700 hover:border-gray-400">
                 <Facebook size={18} />
               </a>
             </div>
