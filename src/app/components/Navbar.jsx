@@ -17,44 +17,111 @@ import {
   User,
   ChevronDown,
   Bell,
+  Airplay
 } from "lucide-react";
+// import { Airplay } from 'lucide-react';  
 import { useAuth } from "@/context/AuthContext";
 
+/**
+ * Base navigation items (public).
+ * We will filter these later depending on user role + loading state.
+ */
 const navItems = [
   { label: "Home", href: "/", Icon: Home },
   { label: "Jobs", href: "/jobs", Icon: Briefcase },
   { label: "Interviews", href: "/interviews", Icon: Video },
-  { label: "Apply", href: "/apply", Icon: Briefcase },
+  { label: "Apply", href: "/apply", Icon: Airplay },
   { label: "About", href: "/about", Icon: Info },
-  { label: "Contact", href: "/contact", Icon: Mail },
+  // { label: "Contact", href: "/contact", Icon: Mail },
 ];
 
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
 
+  // Mobile drawer open/close
   const [open, setOpen] = useState(false);
+  // For avoiding hydration issues with motion
   const [mounted, setMounted] = useState(false);
+  // Avatar dropdown state
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
+  // Auth info from context (Firebase user, loading, logout helper)
   const { user, loading, logout } = useAuth();
 
-  // 🔔 notifications state
+  // ---------- ROLE & DB USER STATE ----------
+  // This holds the user document from MongoDB (/api/users/me)
+  const [dbUser, setDbUser] = useState(null);
+  // Convenience copy of the role (candidate | hr | company | admin | student)
+  const [role, setRole] = useState(null);
+  // While we are fetching MongoDB user/role, this is true
+  const [roleLoading, setRoleLoading] = useState(false);
+
+  // ---------- NOTIFICATION STATE ----------
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [notifLoading, setNotifLoading] = useState(false);
 
+  // Mark when component is mounted (for framer-motion / client things)
   useEffect(() => setMounted(true), []);
 
+  // Close menus on route change
   useEffect(() => {
-    setOpen(false); // close drawer on route change
+    setOpen(false);
     setUserMenuOpen(false);
     setNotifOpen(false);
   }, [pathname]);
 
+  /**
+   * Fetch the DB user (and role) from /api/users/me when Firebase user changes.
+   * Role is stored in MongoDB as `role: "candidate" | "hr" | "company" | "admin" | "student"`.
+   */
+  useEffect(() => {
+    // If not logged in: clear role & stop loading
+    if (!user) {
+      setDbUser(null);
+      setRole(null);
+      setRoleLoading(false);
+      return;
+    }
+
+    let active = true;
+
+    const fetchDbUser = async () => {
+      try {
+        setRoleLoading(true);
+        const res = await fetch(`/api/users/me?uid=${user.uid}`);
+        if (!res.ok) {
+          console.error("Failed to load DB user for navbar.");
+          return;
+        }
+        const data = await res.json();
+        if (!active) return;
+        setDbUser(data);
+        setRole(data?.role || null);
+      } catch (err) {
+        console.error("Error loading DB user:", err);
+      } finally {
+        if (active) setRoleLoading(false);
+      }
+    };
+
+    fetchDbUser();
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  /**
+   * Helper: determines if a nav item is active for underline highlight.
+   */
   const isActive = (href) =>
     pathname === href ? "text-blue-600" : "text-gray-700";
 
+  /**
+   * Display name & avatar helpers
+   */
   const displayName =
     user?.displayName || (user?.email ? user.email.split("@")[0] : "User");
 
@@ -67,9 +134,15 @@ export default function Navbar() {
 
   const avatarUrl = user?.photoURL || null;
 
+  /**
+   * Notification helpers
+   */
   const unreadCount = notifications.filter((n) => !n.read).length;
   const lastFiveNotifications = notifications.slice(0, 5);
 
+  /**
+   * Logout handler: calls AuthContext.logout, closes menus, routes home.
+   */
   const handleLogout = async () => {
     try {
       await logout();
@@ -81,7 +154,10 @@ export default function Navbar() {
     }
   };
 
-  // 🔔 load notifications when user is logged in
+  /**
+   * Load notifications for the logged-in user.
+   * This hits /api/notifications?email=... and refreshes every 30s.
+   */
   useEffect(() => {
     if (!user || loading) return;
 
@@ -107,16 +183,17 @@ export default function Navbar() {
 
     fetchNotifications();
 
-    // optional: refresh every 30s
     const interval = setInterval(fetchNotifications, 30000);
-
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
   }, [user, loading]);
 
-  // 🔔 toggle dropdown & mark all as read when opening
+  /**
+   * When opening the notification dropdown, mark all as read in DB
+   * and update in-memory state.
+   */
   const handleToggleNotifications = async () => {
     if (!notifOpen && user && unreadCount > 0) {
       try {
@@ -126,7 +203,6 @@ export default function Navbar() {
           body: JSON.stringify({ email: user.email }),
         });
 
-        // update local state
         setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       } catch (err) {
         console.error("Failed to mark notifications as read:", err);
@@ -136,12 +212,85 @@ export default function Navbar() {
     setNotifOpen((v) => !v);
   };
 
+  /**
+   * Handle click on a single notification:
+   * - If `notif.link` exists, navigate there.
+   */
   const handleNotificationClick = (notif) => {
     if (notif.link) {
       router.push(notif.link);
       setNotifOpen(false);
     }
   };
+
+  /**
+   * ROLE-BASED NAVIGATION FILTER (very important for UX & security feel):
+   *
+   * 1) While `roleLoading === true` (user logged in but Mongo role not loaded yet),
+   *    we HIDE sensitive items:
+   *      - /jobs
+   *      - /apply
+   *      - /interviews
+   *    so nobody can see them even for 1 second until we know the exact role.
+   *
+   * 2) Once role is known:
+   *    - candidate / student:
+   *        show: Jobs, Apply
+   *        hide: Interviews
+   *    - company:
+   *        show: Jobs
+   *        hide: Apply, Interviews
+   *    - hr:
+   *        show: Interviews
+   *        hide: Jobs, Apply
+   *    - admin:
+   *        show everything
+   *    - guests (no user, no role):
+   *        treat as public user, but we hide Interviews (HR/admin tool).
+   */
+  const filteredNavItems = navItems.filter(({ href }) => {
+    // While role is loading for a logged-in user → hide sensitive items
+    if (roleLoading && user) {
+      if (href === "/jobs" || href === "/apply" || href === "/interviews") {
+        return false;
+      }
+      return true;
+    }
+
+    // If no logged-in user (guest) → show public pages, hide interviews
+    if (!user || !role) {
+      if (href === "/interviews") return false;
+      return true;
+    }
+
+    // Role-specific logic after role is known
+    if (role === "hr") {
+      // HR sees interviews only (plus Home/About/Contact)
+      if (href === "/jobs" || href === "/apply") return false;
+      return true;
+    }
+
+    if (role === "company") {
+      // Company only sees Jobs from the sensitive things
+      if (href === "/apply" || href === "/interviews") return false;
+      return true;
+    }
+
+    if (role === "candidate" || role === "student") {
+      // Candidates/students see Jobs & Apply but NOT Interviews page
+      if (href === "/interviews") return false;
+      return true;
+    }
+
+    if (role === "admin") {
+      // Admin sees everything
+      return true;
+    }
+
+    // Fallback for unexpected roles: treat like public user, hide interviews
+    if (href === "/interviews") return false;
+    return true;
+  });
 
   return (
     <nav className="sticky top-0 z-50">
@@ -178,10 +327,10 @@ export default function Navbar() {
               </motion.span>
             </Link>
 
-            {/* Desktop links */}
+            {/* Desktop links (top nav) */}
             <div className="hidden md:flex items-center gap-2 relative">
               <AnimatePresence>{/* shared underline container */}</AnimatePresence>
-              {navItems.map(({ label, href, Icon }) => {
+              {filteredNavItems.map(({ label, href, Icon }) => {
                 const active = pathname === href;
                 return (
                   <Link
@@ -261,6 +410,7 @@ export default function Navbar() {
                       )}
                     </button>
 
+                    {/* Notification dropdown */}
                     <AnimatePresence>
                       {notifOpen && (
                         <motion.div
@@ -359,6 +509,7 @@ export default function Navbar() {
                       />
                     </button>
 
+                    {/* Avatar menu content */}
                     <AnimatePresence>
                       {userMenuOpen && (
                         <motion.div
@@ -366,7 +517,7 @@ export default function Navbar() {
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -6 }}
                           transition={{ duration: 0.18 }}
-                          className="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 bg-white shadow-lg z-50 overflow-hidden"
+                          className="absolute right-0 mt-2 w-52 rounded-lg border border-gray-200 bg-white shadow-lg z-50 overflow-hidden"
                         >
                           <div className="px-3 py-2 border-b border-gray-100">
                             <p className="text-xs text-gray-500">
@@ -375,6 +526,14 @@ export default function Navbar() {
                             <p className="text-xs font-medium text-gray-800 truncate">
                               {user.email}
                             </p>
+                            {role && (
+                              <p className="text-[11px] text-gray-500 mt-0.5">
+                                Role:{" "}
+                                <span className="capitalize font-semibold">
+                                  {role}
+                                </span>
+                              </p>
+                            )}
                           </div>
                           <div className="py-1 text-sm">
                             <Link
@@ -389,19 +548,27 @@ export default function Navbar() {
                             >
                               <User size={16} /> Profile
                             </Link>
-                            <Link
-                              href="/application"
-                              className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
-                            >
-                              <User size={16} /> Application
-                            </Link>
-                            <Link
-                              href="/applicant_tracking"
-                              className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
-                            >
-                              <User size={16} /> Applicant Tracking
-                            </Link>
-                            
+
+                            {/* Candidate / student: show "Application" */}
+                            {(role === "candidate" || role === "student") && (
+                              <Link
+                                href="/application"
+                                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
+                              >
+                                <User size={16} /> Application
+                              </Link>
+                            )}
+
+                            {/* HR / Company-only: show "Applicant Tracking" */}
+                            {(role === "hr" || role === "company") && (
+                              <Link
+                                href="/applicant_tracking"
+                                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
+                              >
+                                <User size={16} /> Applicant Tracking
+                              </Link>
+                            )}
+
                             <button
                               onClick={handleLogout}
                               className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-left text-red-600"
@@ -451,7 +618,7 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Mobile drawer (unchanged from your version, no bell here for now) */}
+        {/* Mobile drawer (role-based nav + auth) */}
         <AnimatePresence>
           {open && (
             <motion.div
@@ -463,7 +630,7 @@ export default function Navbar() {
               className="md:hidden border-t border-gray-200 overflow-hidden bg-white/95"
             >
               <div className="px-4 py-3 space-y-1">
-                {/* If logged in, show user info at top */}
+                {/* Mobile user summary */}
                 {!loading && user && (
                   <div className="flex items-center gap-3 px-3 py-2 mb-2 rounded-lg bg-gray-50">
                     <div className="relative w-9 h-9 rounded-full overflow-hidden bg-blue-100 flex items-center justify-center text-sm font-semibold text-blue-700">
@@ -485,11 +652,20 @@ export default function Navbar() {
                       <span className="text-[11px] text-gray-500 truncate">
                         {user.email}
                       </span>
+                      {role && (
+                        <span className="text-[11px] text-gray-500">
+                          Role:{" "}
+                          <span className="capitalize font-semibold">
+                            {role}
+                          </span>
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
 
-                {navItems.map(({ label, href, Icon }) => {
+                {/* Top nav items (filtered by role) */}
+                {filteredNavItems.map(({ label, href, Icon }) => {
                   const active = pathname === href;
                   return (
                     <motion.div
@@ -525,8 +701,9 @@ export default function Navbar() {
                   );
                 })}
 
-                {/* Mobile auth area */}
+                {/* Mobile auth / role-based shortcuts */}
                 <div className="mt-3 flex flex-col gap-2">
+                  {/* Not logged in */}
                   {!loading && !user && (
                     <div className="flex items-center gap-2">
                       <motion.div whileTap={{ scale: 0.98 }} className="flex-1">
@@ -548,6 +725,7 @@ export default function Navbar() {
                     </div>
                   )}
 
+                  {/* Logged in: show role-based links + logout */}
                   {!loading && user && (
                     <>
                       <Link
@@ -562,12 +740,27 @@ export default function Navbar() {
                       >
                         <User size={18} /> Profile
                       </Link>
-                      {/* <Link
-                        href="/profile"
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
-                      >
-                        <User size={18} /> Profile
-                      </Link> */}
+
+                      {/* Candidate / student Application (mobile) */}
+                      {(role === "candidate" || role === "student") && (
+                        <Link
+                          href="/application"
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+                        >
+                          <User size={18} /> Application
+                        </Link>
+                      )}
+
+                      {/* HR / Company-only Applicant Tracking (mobile) */}
+                      {(role === "hr" || role === "company") && (
+                        <Link
+                          href="/applicant_tracking"
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+                        >
+                          <User size={18} /> Applicant Tracking
+                        </Link>
+                      )}
+
                       <button
                         onClick={handleLogout}
                         className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-gray-50 text-left"

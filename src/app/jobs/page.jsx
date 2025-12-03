@@ -4,44 +4,127 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
+import { useAuth } from "@/context/AuthContext";
 
-
+// How many jobs per page
 const PAGE_SIZE = 30;
 
 export default function JobsPage() {
+  // ---------- AUTH & ROLE STATE ----------
+  // Firebase auth user (from context)
+  const { user, loading: authLoading } = useAuth();
+
+  // MongoDB user doc + role (candidate | hr | company)
+  const [role, setRole] = useState(null);
+  const [roleLoading, setRoleLoading] = useState(true);
+  const [blocked, setBlocked] = useState(false); // if true → show 404-style page
+
+  // ---------- JOB LIST STATE ----------
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSector, setSelectedSector] = useState("all");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
-useEffect(()=>{
-  document.title="JobListings | InterviewMate";
-})
 
+  // Set browser tab title once on mount
   useEffect(() => {
-    async function fetchJobs() {
-      setLoading(true);
+    document.title = "JobListings | InterviewMate";
+  }, []);
 
-      const params = new URLSearchParams();
-      params.set("page", String(page));
-      params.set("limit", String(PAGE_SIZE));
-      if (selectedSector !== "all") {
-        params.set("sector", selectedSector);
+  // ---------- LOAD USER ROLE FROM DB ----------
+  // We ask /api/users/me for the role if there is a Firebase user.
+  // If role is "hr" or "company", we mark this page as blocked.
+  useEffect(() => {
+    if (authLoading) return; // wait until Firebase auth finishes
+
+    // Not logged in → no role restriction (guests can see jobs)
+    if (!user) {
+      setRole(null);
+      setBlocked(false);
+      setRoleLoading(false);
+      return;
+    }
+
+    let active = true;
+
+    const fetchRole = async () => {
+      try {
+        setRoleLoading(true);
+        const res = await fetch(`/api/users/me?uid=${user.uid}`);
+        if (!res.ok) {
+          console.error("Failed to load user role for jobs page.");
+          return;
+        }
+        const data = await res.json();
+        if (!active) return;
+
+        const r = data.role || null;
+        setRole(r);
+
+        // HR & Company are not allowed to access /jobs
+        if (r === "hr" || r === "company") {
+          setBlocked(true);
+        } else {
+          setBlocked(false);
+        }
+      } catch (err) {
+        console.error("Error loading role:", err);
+      } finally {
+        if (active) setRoleLoading(false);
       }
+    };
 
-      const res = await fetch(`/api/jobs?${params.toString()}`);
-      const data = await res.json();
+    fetchRole();
 
-      setJobs(data.jobs || []);
-      setTotal(data.total || 0);
-      setTotalPages(data.totalPages || 1);
+    return () => {
+      active = false;
+    };
+  }, [user, authLoading]);
+
+  // ---------- FETCH JOBS FROM API (ONLY IF NOT BLOCKED) ----------
+  useEffect(() => {
+    // Wait until auth + role are decided
+    if (authLoading || roleLoading) return;
+
+    // HR or Company: do NOT fetch jobs
+    if (blocked) {
+      setJobs([]);
       setLoading(false);
+      return;
+    }
+
+    async function fetchJobs() {
+      try {
+        setLoading(true);
+
+        const params = new URLSearchParams();
+        params.set("page", String(page));
+        params.set("limit", String(PAGE_SIZE));
+        if (selectedSector !== "all") {
+          params.set("sector", selectedSector);
+        }
+
+        const res = await fetch(`/api/jobs?${params.toString()}`);
+        const data = await res.json();
+
+        setJobs(data.jobs || []);
+        setTotal(data.total || 0);
+        setTotalPages(data.totalPages || 1);
+      } catch (err) {
+        console.error("Failed to load jobs:", err);
+        setJobs([]);
+        setTotal(0);
+        setTotalPages(1);
+      } finally {
+        setLoading(false);
+      }
     }
 
     fetchJobs();
-  }, [selectedSector, page]);
+  }, [selectedSector, page, authLoading, roleLoading, blocked]);
 
+  // Collect unique sectors from current page (for filter dropdown)
   const sectors = useMemo(() => {
     const s = new Set(jobs.map((job) => job.sector).filter(Boolean));
     return ["all", ...Array.from(s)];
@@ -55,8 +138,44 @@ useEffect(()=>{
     setPage(1);
   }
 
+  // ---------- LOADING STATE: AUTH OR ROLE ----------
+  if (authLoading || roleLoading) {
+    return (
+      <main className="max-w-6xl mx-auto px-4 py-10">
+        <div className="flex justify-center">
+          <LoadingSpinner size="lg" label="Loading jobs..." />
+        </div>
+      </main>
+    );
+  }
+
+  // ---------- ROLE BLOCK: HR / COMPANY → 404 STYLE ----------
+  // This prevents HR or Company from seeing /jobs even if they type URL manually.
+  if (blocked) {
+    return (
+      <main className="min-h-[60vh] flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <h1 className="text-2xl font-bold mb-2">404 | Page not found</h1>
+          <p className="text-sm text-gray-600 mb-4">
+            This page is not available for your account role.
+            <br />
+            If you think this is a mistake, please contact the site admin.
+          </p>
+          <Link
+            href="/"
+            className="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+          >
+            Go back home
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  // ---------- NORMAL JOBS PAGE (CANDIDATE OR GUEST) ----------
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
+      {/* Header + sector filter */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold mb-1">Latest Jobs</h1>
@@ -81,13 +200,14 @@ useEffect(()=>{
         </div>
       </div>
 
-      {/* Spinner while loading */}
+      {/* Spinner while loading jobs */}
       {loading && (
         <div className="flex justify-center py-10">
           <LoadingSpinner size="lg" label="Loading jobs..." />
         </div>
       )}
 
+      {/* No jobs case */}
       {!loading && jobs.length === 0 && (
         <p className="text-gray-500">No jobs found for this sector.</p>
       )}
@@ -179,6 +299,7 @@ useEffect(()=>{
         })}
       </div>
 
+      {/* Pagination controls */}
       {!loading && totalPages > 1 && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-xs text-gray-500">
@@ -186,10 +307,10 @@ useEffect(()=>{
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => canPrev && setPage((p) => p - 1)}
-              disabled={!canPrev}
+              onClick={() => page > 1 && setPage((p) => p - 1)}
+              disabled={page <= 1}
               className={`px-3 py-1.5 rounded-full text-sm border ${
-                canPrev
+                page > 1
                   ? "bg-white hover:bg-gray-50"
                   : "bg-gray-100 text-gray-400 cursor-not-allowed"
               }`}
@@ -197,10 +318,10 @@ useEffect(()=>{
               ← Previous
             </button>
             <button
-              onClick={() => canNext && setPage((p) => p + 1)}
-              disabled={!canNext}
+              onClick={() => page < totalPages && setPage((p) => p + 1)}
+              disabled={page >= totalPages}
               className={`px-3 py-1.5 rounded-full text-sm border ${
-                canNext
+                page < totalPages
                   ? "bg-white hover:bg-gray-50"
                   : "bg-gray-100 text-gray-400 cursor-not-allowed"
               }`}

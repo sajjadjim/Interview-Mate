@@ -12,6 +12,7 @@ import {
   BadgeDollarSign,
   Send,
   Hourglass,
+  AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -19,34 +20,102 @@ export default function InterviewsPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
+  // ---------- ROLE & USER STATE ----------
+  const [currentUserDoc, setCurrentUserDoc] = useState(null); // full Mongo user doc
+  const [role, setRole] = useState(null);                     // "hr" | "admin" | ...
+  const [status, setStatus] = useState(null);                 // "active" | "inactive" | ...
+  const [roleLoading, setRoleLoading] = useState(true);
+  const [unauthorized, setUnauthorized] = useState(false);    // true => hard 404
+  const isHrInactive = role === "hr" && status !== "active";  // HR but not active
+
+  // ---------- APPLICATION DATA ----------
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [currentUserDoc, setCurrentUserDoc] = useState(null);
-  const [sending, setSending] = useState({}); // { [applicationId]: true/false }
+
+  // Sending state per application: { [applicationId]: boolean }
+  const [sending, setSending] = useState({});
   const [message, setMessage] = useState("");
 
-  // Already sent candidates map: { applicationId: record }
+  // Already sent candidates: { applicationId: recordFromInterviewsCandidate }
   const [interviewByApplicationId, setInterviewByApplicationId] = useState({});
 
-  useEffect(()=>{
-    document.title="Interviews | Participants - Interview-Mate";
-  })
+  // Set title
+  useEffect(() => {
+    document.title = "Interviews | Participants - Interview-Mate";
+  }, []);
 
-  // Load applications + current user info + existing interview candidates
+  // ---------- 1) AUTH GUARD: must be logged in ----------
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      router.push("/authentication/login");
+    }
+  }, [authLoading, user, router]);
+
+  // ---------- 2) LOAD USER ROLE & STATUS ----------
+  // Only "hr" and "admin" are allowed.
+  // Others (candidate, company, etc) => unauthorized => 404.
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) return;
+
+    let active = true;
+
+    const fetchUserDoc = async () => {
+      try {
+        setRoleLoading(true);
+
+        const res = await fetch(`/api/users/me?uid=${user.uid}`);
+        if (!res.ok) {
+          console.error("Failed to load user doc for interviews page.");
+          setUnauthorized(true);
+          return;
+        }
+
+        const data = await res.json();
+        if (!active) return;
+
+        setCurrentUserDoc(data);
+
+        const r = data.role || null;
+        const s = data.status || "unknown";
+
+        setRole(r);
+        setStatus(s);
+
+        if (r !== "hr" && r !== "admin") {
+          // ❌ anything that is not hr or admin is blocked
+          setUnauthorized(true);
+        } else {
+          setUnauthorized(false);
+        }
+      } catch (err) {
+        console.error("Error fetching user doc:", err);
+        setUnauthorized(true);
+      } finally {
+        if (active) setRoleLoading(false);
+      }
+    };
+
+    fetchUserDoc();
+
+    return () => {
+      active = false;
+    };
+  }, [authLoading, user]);
+
+  // ---------- 3) LOAD APPLICATIONS & INTERVIEW CANDIDATES ----------
   useEffect(() => {
     const load = async () => {
-      if (authLoading) return;
-
-      if (!user) {
-        router.push("/authentication/login");
-        return;
-      }
+      if (authLoading || roleLoading) return;
+      if (!user) return;
+      if (unauthorized) return; // no data for blocked roles
 
       setLoading(true);
       setMessage("");
 
       try {
-        // 1) fetch applications
+        // 1) fetch all applications
         const appsRes = await fetch("/api/applications");
         const appsData = await appsRes.json();
 
@@ -66,18 +135,8 @@ export default function InterviewsPage() {
           }
         }
 
-        // 3) fetch current user doc from MongoDB
-        const userRes = await fetch(
-          `/api/users/me?email=${encodeURIComponent(user.email)}`
-        );
-        let userDoc = null;
-        if (userRes.ok) {
-          userDoc = await userRes.json();
-        }
-
         setApplications(Array.isArray(appsData) ? appsData : []);
         setInterviewByApplicationId(map);
-        setCurrentUserDoc(userDoc);
       } catch (err) {
         console.error("Error loading data:", err);
         setMessage("Failed to load interview data.");
@@ -87,12 +146,9 @@ export default function InterviewsPage() {
     };
 
     load();
-  }, [authLoading, user, router]);
+  }, [authLoading, roleLoading, unauthorized, user]);
 
-  // Sort applications:
-  // 1) Approved + NOT yet in Interviews_Candidate (send button) → top
-  // 2) Others
-  // Each group sorted by date (day wise)
+  // ---------- 4) SORT APPLICATIONS ----------
   const sortedApplications = useMemo(() => {
     if (!Array.isArray(applications) || applications.length === 0) {
       return [];
@@ -100,9 +156,7 @@ export default function InterviewsPage() {
 
     const parseDate = (dStr) => {
       const d = new Date(dStr);
-      if (Number.isNaN(d.getTime())) return new Date(0);
-      // Force to date only (ignore time) if you like, but not needed
-      return d;
+      return Number.isNaN(d.getTime()) ? new Date(0) : d;
     };
 
     const priority = [];
@@ -125,8 +179,17 @@ export default function InterviewsPage() {
     return [...priority, ...others];
   }, [applications, interviewByApplicationId]);
 
+  // ---------- 5) SEND CANDIDATE HANDLER ----------
   const handleSend = async (app) => {
     if (!user) return;
+
+    // HR must be active; admin can always send
+    if (role === "hr" && status !== "active") {
+      setMessage(
+        "Your HR account is not active yet. You cannot send candidates until activation."
+      );
+      return;
+    }
 
     setSending((prev) => ({ ...prev, [app._id]: true }));
     setMessage("");
@@ -178,16 +241,52 @@ export default function InterviewsPage() {
     }
   };
 
+  // ---------- 6) PERMISSION LOADING ----------
+  if (authLoading || roleLoading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+        <div className="flex flex-col items-center gap-2 text-sm text-slate-600">
+          <span className="inline-block h-6 w-6 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
+          Checking permissions...
+        </div>
+      </main>
+    );
+  }
+
+  // ---------- 7) HARD BLOCK: ONLY HR & ADMIN ----------
+  if (unauthorized) {
+    return (
+      <main className="min-h-[60vh] flex items-center justify-center px-4 bg-slate-50">
+        <div className="text-center max-w-md bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+          <h1 className="text-2xl font-bold mb-2">404 | Page not found</h1>
+          <p className="text-sm text-gray-600 mb-4">
+            This interview management page is only available for HR and admin
+            accounts.
+          </p>
+          <button
+            onClick={() => router.push("/")}
+            className="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+          >
+            Go back home
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // ---------- 8) MAIN HR / ADMIN PAGE ----------
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10">
       <div className="max-w-6xl mx-auto">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
               Interviews Candidates
             </h1>
             <p className="text-sm text-slate-600 mt-1">
-              Manage applicants and send approved candidates to the interview list.
+              Manage applicants and send approved candidates to the interview
+              list.
             </p>
           </div>
           {user && (
@@ -197,11 +296,33 @@ export default function InterviewsPage() {
                 {currentUserDoc?.name ||
                   user.displayName ||
                   user.email?.split("@")[0]}
-              </span>
+              </span>{" "}
+              · Role:{" "}
+              <span className="capitalize font-semibold">{role}</span>
             </div>
           )}
         </div>
 
+        {/* HR inactive warning */}
+        {isHrInactive && (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-3 text-sm text-amber-800">
+            <AlertTriangle className="mt-0.5" size={18} />
+            <div>
+              <p className="font-semibold">Waiting for active status</p>
+              <p className="mt-1">
+                Your HR account status is currently{" "}
+                <span className="font-semibold">inactive</span>. You can view
+                applicants, but you{" "}
+                <span className="font-semibold">
+                  cannot send candidates for interview
+                </span>{" "}
+                until an admin activates your profile.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Loading data spinner */}
         {loading && (
           <div className="flex justify-center py-16">
             <div className="flex flex-col items-center gap-3 text-slate-500">
@@ -211,12 +332,14 @@ export default function InterviewsPage() {
           </div>
         )}
 
+        {/* No applicants */}
         {!loading && sortedApplications.length === 0 && (
           <div className="text-center py-16 text-slate-500 text-sm">
             No applicants found yet.
           </div>
         )}
 
+        {/* Table */}
         {!loading && sortedApplications.length > 0 && (
           <div className="overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm">
             <table className="min-w-full text-sm">
@@ -226,7 +349,7 @@ export default function InterviewsPage() {
                     Applicant
                   </th>
                   <th className="px-4 py-3 text-left font-semibold">
-                    Date & Time
+                    Date &amp; Time
                   </th>
                   <th className="px-4 py-3 text-left font-semibold">
                     Topic
@@ -323,11 +446,11 @@ export default function InterviewsPage() {
                         </span>
                       </td>
 
-                      {/* Action Button */}
+                      {/* Action */}
                       <td className="px-4 py-3 align-top">
                         {app.approvalStatus === "Approved" ? (
                           alreadyInInterview ? (
-                            // Candidate already stored in Interviews_Candidate
+                            // Already stored in Interviews_Candidate
                             <button
                               disabled
                               className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-amber-800 bg-amber-100 border border-amber-200 cursor-not-allowed"
@@ -335,8 +458,17 @@ export default function InterviewsPage() {
                               <Hourglass size={14} />
                               Waiting for Interview
                             </button>
+                          ) : isHrInactive ? (
+                            // HR inactive, cannot send
+                            <button
+                              disabled
+                              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-amber-800 bg-amber-100 border border-amber-200 cursor-not-allowed"
+                            >
+                              <AlertTriangle size={14} />
+                              Waiting for active status
+                            </button>
                           ) : (
-                            // Candidate can be sent
+                            // HR active or Admin
                             <button
                               onClick={() => handleSend(app)}
                               disabled={!!sending[app._id]}
@@ -365,6 +497,7 @@ export default function InterviewsPage() {
           </div>
         )}
 
+        {/* Global message */}
         {message && (
           <div className="mt-4 text-sm text-center text-slate-700 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">
             {message}

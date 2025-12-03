@@ -3,8 +3,17 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { CalendarDays, Clock, Mail, User, Tag, CheckCircle2 } from "lucide-react";
+import {
+  CalendarDays,
+  Clock,
+  Mail,
+  User,
+  Tag,
+  CheckCircle2,
+} from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
+// All allowed time slots
 const TIME_OPTIONS = [
   "9-10 AM",
   "11-12 AM",
@@ -14,6 +23,7 @@ const TIME_OPTIONS = [
   "10-11 PM",
 ];
 
+// Topic dropdown options
 const TOPIC_OPTIONS = [
   "IT Sector",
   "Educational",
@@ -22,15 +32,28 @@ const TOPIC_OPTIONS = [
   "Other",
 ];
 
+/**
+ * ApplyPage
+ * - Students / candidates / admin can access.
+ * - HR and Company users are blocked (404-style page).
+ * - Stores application with default:
+ *    paymentStatus: "unpaid"
+ *    approvalStatus: "Not approved"
+ */
 export default function ApplyPage() {
   const router = useRouter();
 
-  
+  // ---------- AUTH & ROLE ----------
+  const { user, loading: authLoading } = useAuth();
+  const [role, setRole] = useState(null);
+  const [roleLoading, setRoleLoading] = useState(true);
+  const [blocked, setBlocked] = useState(false); // true => show 404-style
 
-  // default date = today
+  // default date = today (YYYY-MM-DD)
   const today = new Date();
   const defaultDate = today.toISOString().split("T")[0];
 
+  // ---------- FORM STATE ----------
   const [name, setName] = useState("");
   const [date, setDate] = useState(defaultDate);
   const [timeSlot, setTimeSlot] = useState("");
@@ -40,11 +63,72 @@ export default function ApplyPage() {
   const [successMsg, setSuccessMsg] = useState("");
   const [error, setError] = useState("");
 
-    useEffect(()=>{
-      document.title="Interviews | Application - Interview-Mate";
-    })
-  
+  // Set page title once
+  useEffect(() => {
+    document.title = "Interviews | Application - Interview-Mate";
+  }, []);
 
+  /**
+   * Fetch the Mongo user (role) from /api/users/me.
+   * Block HR & Company from this page.
+   * Allow: admin, candidate (students), guests (no role).
+   */
+  useEffect(() => {
+    if (authLoading) return;
+
+    // Not logged in → no role restriction for Apply page
+    if (!user) {
+      setRole(null);
+      setBlocked(false);
+      setRoleLoading(false);
+      return;
+    }
+
+    let active = true;
+
+    const fetchRole = async () => {
+      try {
+        setRoleLoading(true);
+        const res = await fetch(`/api/users/me?uid=${user.uid}`);
+        if (!res.ok) {
+          console.error("Failed to load user role for apply page.");
+          return;
+        }
+        const data = await res.json();
+        if (!active) return;
+
+        const r = data.role || null;
+        setRole(r);
+
+        // ❌ Block HR and Company
+        if (r === "hr" || r === "company") {
+          setBlocked(true);
+        } else {
+          // ✅ admin, candidate/student, other roles
+          setBlocked(false);
+        }
+      } catch (err) {
+        console.error("Error loading role:", err);
+      } finally {
+        if (active) setRoleLoading(false);
+      }
+    };
+
+    fetchRole();
+
+    return () => {
+      active = false;
+    };
+  }, [user, authLoading]);
+
+  /**
+   * Submit application:
+   * - Validates required fields
+   * - Sends POST /api/applications
+   * - Backend should set:
+   *     paymentStatus: "unpaid"
+   *     approvalStatus: "Not approved"
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -67,6 +151,8 @@ export default function ApplyPage() {
           date,
           timeSlot,
           topic,
+          // You can also send current user email if logged in:
+          // userEmail: user?.email || null,
         }),
       });
 
@@ -82,7 +168,7 @@ export default function ApplyPage() {
       setTopic("");
       setDate(defaultDate);
 
-      // optionally redirect to details page after a short delay
+      // Optionally redirect after a short delay:
       // setTimeout(() => router.push("/applicants-details"), 1200);
     } catch (err) {
       console.error(err);
@@ -92,6 +178,41 @@ export default function ApplyPage() {
     }
   };
 
+  // ---------- LOADING AUTH/ROLE ----------
+  if (authLoading || roleLoading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+        <div className="flex flex-col items-center gap-2 text-sm text-slate-600">
+          <span className="inline-block h-6 w-6 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
+          Checking permissions...
+        </div>
+      </main>
+    );
+  }
+
+  // ---------- BLOCKED: HR / COMPANY ⇒ 404 STYLE ----------
+  if (blocked) {
+    return (
+      <main className="min-h-[60vh] flex items-center justify-center px-4 bg-slate-50">
+        <div className="text-center max-w-md bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+          <h1 className="text-2xl font-bold mb-2">404 | Page not found</h1>
+          <p className="text-sm text-gray-600 mb-4">
+            This application page is not available for your account role.
+            <br />
+            Only students/candidates (and admin) can book interview slots.
+          </p>
+          <button
+            onClick={() => router.push("/")}
+            className="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+          >
+            Go back home
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // ---------- MAIN APPLY FORM (ALLOWED ROLES) ----------
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100 px-4 py-10">
       <motion.div
@@ -106,14 +227,15 @@ export default function ApplyPage() {
               Apply for an Interview Slot
             </h1>
             <p className="text-sm text-slate-600 mt-1">
-              Fill in your details and choose a preferred date & time. Payment status will start as{" "}
+              Fill in your details and choose a preferred date &amp; time. Payment
+              status will start as{" "}
               <span className="font-semibold">unpaid</span> and approval as{" "}
               <span className="font-semibold">Not approved</span>.
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs sm:text-sm text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-full px-3 py-1">
             <CheckCircle2 size={16} />
-            Secure & hassle-free booking
+            Secure &amp; hassle-free booking
           </div>
         </div>
 
@@ -207,13 +329,17 @@ export default function ApplyPage() {
             <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
               <p className="font-semibold text-slate-700">Payment status</p>
               <p className="mt-1 text-slate-600">
-                Default: <span className="font-semibold text-amber-600">unpaid</span>
+                Default:{" "}
+                <span className="font-semibold text-amber-600">unpaid</span>
               </p>
             </div>
             <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
               <p className="font-semibold text-slate-700">Approval status</p>
               <p className="mt-1 text-slate-600">
-                Default: <span className="font-semibold text-rose-600">Not approved</span>
+                Default:{" "}
+                <span className="font-semibold text-rose-600">
+                  Not approved
+                </span>
               </p>
             </div>
           </div>

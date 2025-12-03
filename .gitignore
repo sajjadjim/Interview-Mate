@@ -16,6 +16,9 @@
 # testing
 /coverage
 
+
+# vscode file settings
+.vscode
 # next.js
 /.next/
 /out/
