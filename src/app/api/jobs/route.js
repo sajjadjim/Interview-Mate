@@ -2,12 +2,20 @@
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/dbConnect";
 
+// Allowed sectors for validation
+const ALLOWED_SECTORS = ["IT Sector", "Management", "Education", "Commercial"];
+
 /**
  * GET /api/jobs
- * Query:
- *  - sector (optional)
- *  - page (default 1)
- *  - limit (default 30)
+ *
+ * Query params:
+ *  - sector (optional) → e.g. "IT Sector", "Management", "all"
+ *  - page   (optional) → default 1
+ *  - limit  (optional) → default 30
+ *
+ * Returns only *active* jobs:
+ *  - jobs with deadline >= now
+ *  - or jobs without deadline (older data)
  */
 export async function GET(request) {
   try {
@@ -18,11 +26,19 @@ export async function GET(request) {
     const limit = parseInt(searchParams.get("limit") ?? "30", 10);
 
     const jobsCollection = await getCollection("jobs");
+    const now = new Date();
 
     const query = {};
+
+    // Sector filter
     if (sector && sector !== "all") {
       query.sector = sector;
     }
+
+    // Only active jobs:
+    // - deadline >= now
+    // - OR no deadline field (for old jobs without deadline)
+    query.$or = [{ deadline: { $gte: now } }, { deadline: { $exists: false } }];
 
     const skip = (page - 1) * limit;
 
@@ -58,21 +74,14 @@ export async function GET(request) {
 
 /**
  * POST /api/jobs
- * Body (from company job post form):
- * {
- *   title,
- *   sector,
- *   type,
- *   location,
- *   jobTime,
- *   jobVacancy,
- *   description,
- *   salary: { min, max, currency },
- *   company,
- *   companyEmail,
- *   postedByUid,
- *   postedByEmail
- * }
+ *
+ * Used by company users from /jobs/post page.
+ * Creates a new job with:
+ *  - deadline (last date to apply)
+ *  - expireAt = deadline + 3 days (for TTL auto-delete)
+ *
+ * IMPORTANT: In MongoDB (once), create TTL index:
+ * db.jobs.createIndex({ expireAt: 1 }, { expireAfterSeconds: 0 })
  */
 export async function POST(request) {
   try {
@@ -83,89 +92,143 @@ export async function POST(request) {
       sector,
       type,
       location,
-      jobTime,
       jobVacancy,
-      description,
-      salary,
-      company,
+      jobTime,
+      jobAddress,
+      salaryMin,
+      salaryMax,
+      salaryCurrency,
+      companyName,
       companyEmail,
-      postedByUid,
-      postedByEmail,
-    } = body || {};
+      deadline, // string: "YYYY-MM-DD"
+      description,
+      requirements, // textarea: newline separated string OR array
+      responsibilities, // textarea: newline separated string OR array
+    } = body;
 
-    // Basic validation
-    if (!title || !sector || !type || !location || !description) {
+    // Basic "must-have" validation
+    if (
+      !title ||
+      !companyName ||
+      !companyEmail ||
+      !sector ||
+      !type ||
+      !location ||
+      !jobVacancy ||
+      !jobTime ||
+      !jobAddress ||
+      !salaryMin ||
+      !salaryMax ||
+      !salaryCurrency ||
+      !deadline
+    ) {
       return NextResponse.json(
-        { message: "Missing required fields." },
-        { status: 400 }
-      );
-    }
-
-    // Vacancy required + > 0
-    if (!jobVacancy || Number(jobVacancy) <= 0) {
-      return NextResponse.json(
-        { message: "Job vacancy must be at least 1." },
+        { message: "All required fields must be provided." },
         { status: 400 }
       );
     }
 
     const jobsCollection = await getCollection("jobs");
 
-    // Generate next job id: JOB-001, JOB-002, ...
-    const lastJob = await jobsCollection
-      .find({})
-      .sort({ createdAt: -1 })
-      .limit(1)
-      .toArray();
+    // Normalize sector
+    const normalizedSector = ALLOWED_SECTORS.includes(sector)
+      ? sector
+      : "Commercial";
 
-    let nextNumber = 1;
-    if (lastJob.length > 0 && lastJob[0].id) {
-      const match = String(lastJob[0].id).match(/JOB-(\d+)/);
-      if (match && match[1]) {
-        nextNumber = Number(match[1]) + 1;
-      }
+    const vacancyNum = Number(jobVacancy);
+    const salaryMinNum = Number(salaryMin);
+    const salaryMaxNum = Number(salaryMax);
+
+    if (
+      Number.isNaN(vacancyNum) ||
+      Number.isNaN(salaryMinNum) ||
+      Number.isNaN(salaryMaxNum)
+    ) {
+      return NextResponse.json(
+        { message: "Vacancy and salary must be valid numbers." },
+        { status: 400 }
+      );
     }
-    const jobId = `JOB-${String(nextNumber).padStart(3, "3")}`; // JOB-001, JOB-002
+
+    // Parse deadline from "YYYY-MM-DD"
+    const deadlineDate = new Date(deadline);
+    if (Number.isNaN(deadlineDate.getTime())) {
+      return NextResponse.json(
+        { message: "Invalid deadline date." },
+        { status: 400 }
+      );
+    }
 
     const now = new Date();
+    if (deadlineDate < now) {
+      return NextResponse.json(
+        { message: "Deadline cannot be in the past." },
+        { status: 400 }
+      );
+    }
 
-    const salaryObj = salary || {};
+    // TTL auto-delete 3 days after deadline
+    const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+    const expireAt = new Date(deadlineDate.getTime() + THREE_DAYS_MS);
+
+    // Simple custom id like JOB-026
+    const totalCount = await jobsCollection.countDocuments();
+    const customId = `JOB-${String(totalCount + 1).padStart(3, "0")}`;
+
+    // Normalize requirements/responsibilities into arrays
+    let requirementsArr = [];
+    if (Array.isArray(requirements)) {
+      requirementsArr = requirements;
+    } else if (typeof requirements === "string" && requirements.trim() !== "") {
+      requirementsArr = requirements.split("\n").map((line) => line.trim());
+    }
+
+    let responsibilitiesArr = [];
+    if (Array.isArray(responsibilities)) {
+      responsibilitiesArr = responsibilities;
+    } else if (
+      typeof responsibilities === "string" &&
+      responsibilities.trim() !== ""
+    ) {
+      responsibilitiesArr = responsibilities.split("\n").map((line) => line.trim());
+    }
+
     const doc = {
-      id: jobId,
+      id: customId,
       title,
-      company: company || null,
-      companyEmail: companyEmail || null,
-      sector,
+      company: companyName,
+      sector: normalizedSector,
       type,
       location,
-      jobTime: jobTime || null,
-      jobVacancy: Number(jobVacancy),
-      description,
+      jobVacancy: vacancyNum,
+      jobTime,
+      jobAddress,
       salary: {
-        min:
-          salaryObj.min !== undefined && salaryObj.min !== null
-            ? Number(salaryObj.min)
-            : null,
-        max:
-          salaryObj.max !== undefined && salaryObj.max !== null
-            ? Number(salaryObj.max)
-            : null,
-        currency: salaryObj.currency || "BDT",
+        min: salaryMinNum,
+        max: salaryMaxNum,
+        currency: salaryCurrency,
       },
       postedDate: now,
-      postedByUid: postedByUid || null,
-      postedByEmail: postedByEmail || null,
+
+      // 🔴 new fields for deadline / TTL
+      deadline: deadlineDate,
+      expireAt,
+
+      description: description || "",
+      requirements: requirementsArr,
+      responsibilities: responsibilitiesArr,
+
+      createdByEmail: companyEmail,
       createdAt: now,
-      updatedAt: now,
     };
 
     const result = await jobsCollection.insertOne(doc);
 
     return NextResponse.json(
       {
-        message: "Job created successfully.",
-        _id: result.insertedId,
-        id: jobId,
+        ok: true,
+        insertedId: result.insertedId.toString(),
+        id: customId,
       },
       { status: 201 }
     );

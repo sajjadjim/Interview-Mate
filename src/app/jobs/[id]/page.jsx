@@ -1,3 +1,4 @@
+// src/app/jobs/[id]/page.jsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -6,6 +7,19 @@ import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 
+/**
+ * JobDetailsPage
+ *
+ * Responsibilities:
+ *  - Fetch single job data from /api/jobs/:id
+ *  - Fetch logged-in Mongo user from /api/users/me
+ *  - Only "candidate" role can apply
+ *  - Check if candidate already applied via /api/users-jobs-application
+ *  - Disable apply if:
+ *      * not logged in
+ *      * not candidate
+ *      * deadline is over
+ */
 export default function JobDetailsPage({ params }) {
   const { id } = params;
 
@@ -40,7 +54,6 @@ export default function JobDetailsPage({ params }) {
         const data = await res.json();
         setJob(data);
 
-        // optional: update page title
         if (data?.title) {
           document.title = `${data.title} | InterviewMate`;
         }
@@ -132,7 +145,21 @@ export default function JobDetailsPage({ params }) {
   }, [job, user, role]);
 
   // --------- Derived helpers ----------
-  const canApply = !!user && role === "candidate";
+  // Only candidate role & logged in can apply
+  const canApplyBase = !!user && role === "candidate";
+
+  // Compute deadline status
+  let deadlineDate = null;
+  let isDeadlineOver = false;
+
+  if (job?.deadline) {
+    deadlineDate = new Date(job.deadline);
+    if (!Number.isNaN(deadlineDate.getTime())) {
+      isDeadlineOver = deadlineDate < new Date();
+    }
+  }
+
+  const canApply = canApplyBase && !isDeadlineOver;
 
   // --------- Handle apply ----------
   const handleApply = async () => {
@@ -145,6 +172,11 @@ export default function JobDetailsPage({ params }) {
 
     if (role && role !== "candidate") {
       setApplyMessage("Only candidate accounts can apply for jobs.");
+      return;
+    }
+
+    if (isDeadlineOver) {
+      setApplyMessage("Application deadline is over for this job.");
       return;
     }
 
@@ -185,8 +217,10 @@ export default function JobDetailsPage({ params }) {
         location: job.location,
         salary: job.salary,
         postedDate: job.postedDate,
-        jobVacancy: job.jobVacancy ?? null,
-        jobTime: job.jobTime ?? null,
+        jobVacancy: job.jobVacancy,
+        jobTime: job.jobTime,
+        jobAddress: job.jobAddress,
+        jobDeadline: job.deadline,
 
         candidateUid: user.uid,
         candidateEmail: dbUser?.email || user.email,
@@ -260,8 +294,9 @@ export default function JobDetailsPage({ params }) {
     description,
     requirements,
     responsibilities,
-    jobTime,
     jobVacancy,
+    jobTime,
+    jobAddress,
   } = job;
 
   const logo = logoUrl || companyLogo || null;
@@ -300,7 +335,7 @@ export default function JobDetailsPage({ params }) {
           </div>
         </div>
 
-        {/* Meta info (now with time & vacancy) */}
+        {/* Meta info */}
         <div className="mt-4 flex flex-wrap gap-2 text-xs text-gray-700">
           {location && (
             <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1">
@@ -312,14 +347,19 @@ export default function JobDetailsPage({ params }) {
               💼 {type}
             </span>
           )}
-          {jobTime && (
-            <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1">
-              ⏰ {jobTime}
-            </span>
-          )}
-          {jobVacancy !== undefined && jobVacancy !== null && (
+          {typeof jobVacancy === "number" && (
             <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1">
               👥 Vacancy: {jobVacancy}
+            </span>
+          )}
+          {jobTime && (
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1">
+              🕒 Job Time: {jobTime}
+            </span>
+          )}
+          {jobAddress && (
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1">
+              📫 Address: {jobAddress}
             </span>
           )}
           {salary && (
@@ -330,6 +370,11 @@ export default function JobDetailsPage({ params }) {
           {postedDate && (
             <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1">
               📅 Posted: {new Date(postedDate).toLocaleDateString()}
+            </span>
+          )}
+          {deadlineDate && (
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1">
+              ⏰ Deadline: {deadlineDate.toLocaleDateString()}
             </span>
           )}
         </div>
@@ -368,13 +413,16 @@ export default function JobDetailsPage({ params }) {
 
         {/* Apply section */}
         <div className="mt-6 space-y-2">
+          {/* Only show apply button for logged-in candidates & within deadline */}
           {canApply && (
             <button
               onClick={handleApply}
-              disabled={applyLoading || hasApplied}
+              disabled={applyLoading || hasApplied || isDeadlineOver}
               className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {hasApplied
+              {isDeadlineOver
+                ? "Deadline over"
+                : hasApplied
                 ? "Already applied"
                 : applyLoading
                 ? "Applying..."
@@ -382,6 +430,15 @@ export default function JobDetailsPage({ params }) {
             </button>
           )}
 
+          {/* Deadline message */}
+          {isDeadlineOver && (
+            <p className="text-xs text-red-500 mt-1">
+              Application deadline is over. You can no longer apply for this
+              job.
+            </p>
+          )}
+
+          {/* If not logged in, show hint */}
           {!user && (
             <p className="text-xs text-gray-500">
               Please{" "}
@@ -395,6 +452,7 @@ export default function JobDetailsPage({ params }) {
             </p>
           )}
 
+          {/* If logged in but not candidate */}
           {user && role && role !== "candidate" && (
             <p className="text-xs text-gray-500">
               Only{" "}
@@ -403,6 +461,7 @@ export default function JobDetailsPage({ params }) {
             </p>
           )}
 
+          {/* Feedback message */}
           {applyMessage && (
             <p className="text-xs mt-1 text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
               {applyMessage}

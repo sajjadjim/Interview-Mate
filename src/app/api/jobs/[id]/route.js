@@ -3,16 +3,23 @@ import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/dbConnect";
 import { ObjectId } from "mongodb";
 
+/**
+ * GET /api/jobs/:id
+ *
+ * Tries to find job by:
+ *  - custom id  (id: "JOB-004")
+ *  - Mongo _id (ObjectId)
+ */
 export async function GET(request, { params }) {
   const { id } = params;
 
   try {
     const jobsCollection = await getCollection("jobs");
 
-    // Try match by your custom id field first
+    // 1) Try custom id
     let job = await jobsCollection.findOne({ id });
 
-    // If not found, try by Mongo ObjectId
+    // 2) Try Mongo ObjectId
     if (!job && ObjectId.isValid(id)) {
       job = await jobsCollection.findOne({ _id: new ObjectId(id) });
     }

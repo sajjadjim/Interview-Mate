@@ -1,112 +1,117 @@
+// src/app/jobs/post/page.jsx
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 
-const SECTORS = [
-  "IT Sector",
-  "Management",
-  "Education",
-  "Commercial",
-  "Other",
-];
+/**
+ * JobsPostPage
+ *
+ * Responsibilities:
+ *  - Only accessible to:
+ *      * logged-in user
+ *      * role === "company"
+ *      * status === "active"
+ *  - Form to create job via POST /api/jobs
+ *  - Fields:
+ *      - title, sector, type, location
+ *      - jobVacancy, jobTime, jobAddress
+ *      - salaryMin, salaryMax, salaryCurrency
+ *      - deadline (application last date)
+ *      - description, requirements, responsibilities
+ */
+const SECTORS = ["IT Sector", "Management", "Education", "Commercial"];
+const TYPES = ["Full-Time", "Part-Time", "Contract", "Internship"];
 
-const TYPES = ["Full-Time", "Part-Time", "Remote", "Internship"];
-
-export default function PostJobPage() {
-  const router = useRouter();
+export default function JobsPostPage() {
   const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
 
   const [dbUser, setDbUser] = useState(null);
-  const [loadingUser, setLoadingUser] = useState(true);
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState("");
+  const [role, setRole] = useState(null);
+  const [status, setStatus] = useState(null);
+  const [checkingAccess, setCheckingAccess] = useState(true);
+  const [notAllowed, setNotAllowed] = useState(false);
 
   // Form state
   const [title, setTitle] = useState("");
-  const [sector, setSector] = useState("");
-  const [type, setType] = useState("");
+  const [sector, setSector] = useState(SECTORS[0]);
+  const [type, setType] = useState(TYPES[0]);
   const [location, setLocation] = useState("");
+  const [jobVacancy, setJobVacancy] = useState("");
   const [jobTime, setJobTime] = useState("");
-  const [vacancy, setVacancy] = useState("");
+  const [jobAddress, setJobAddress] = useState("");
   const [salaryMin, setSalaryMin] = useState("");
   const [salaryMax, setSalaryMax] = useState("");
   const [salaryCurrency, setSalaryCurrency] = useState("BDT");
+  const [deadline, setDeadline] = useState("");
   const [description, setDescription] = useState("");
+  const [requirements, setRequirements] = useState("");
+  const [responsibilities, setResponsibilities] = useState("");
 
-  // Company identity
-  const [companyName, setCompanyName] = useState("");
-  const [companyEmail, setCompanyEmail] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
 
-  // Load dbUser (role + status + companyProfile)
+  // Set page title
+  useEffect(() => {
+    document.title = "Post a Job | InterviewMate";
+  }, []);
+
+  // Check auth + role + status
   useEffect(() => {
     if (authLoading) return;
 
     if (!user) {
-      // Not logged in → send to login
       router.push("/authentication/login");
       return;
     }
 
     let active = true;
 
-    const loadUser = async () => {
+    const checkUser = async () => {
       try {
-        setLoadingUser(true);
+        setCheckingAccess(true);
         const res = await fetch(`/api/users/me?uid=${user.uid}`);
         if (!res.ok) {
-          setError("Failed to load user data.");
+          console.error("Failed to load user for job post page.");
+          setNotAllowed(true);
           return;
         }
         const data = await res.json();
         if (!active) return;
 
         setDbUser(data);
+        setRole(data.role || null);
+        setStatus(data.status || null);
 
-        if (data.role !== "company") {
-          setError("Only company accounts can post jobs.");
-          return;
+        // Only active company accounts can access
+        if (data.role !== "company" || data.status !== "active") {
+          setNotAllowed(true);
+        } else {
+          setNotAllowed(false);
         }
-
-        if (data.status !== "active") {
-          setError(
-            "Your company account is not active yet. Please wait for admin approval."
-          );
-          return;
-        }
-
-        const cp = data.companyProfile || {};
-        setCompanyName(cp.companyName || "");
-        setCompanyEmail(cp.companyEmail || data.email || user.email || "");
       } catch (err) {
-        console.error(err);
-        setError("Failed to load user data.");
+        console.error("Error checking access:", err);
+        setNotAllowed(true);
       } finally {
-        if (active) setLoadingUser(false);
+        if (active) setCheckingAccess(false);
       }
     };
 
-    loadUser();
+    checkUser();
 
     return () => {
       active = false;
     };
-  }, [user, authLoading, router]);
+  }, [authLoading, user, router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
+    setMessage("");
 
-    if (!title || !sector || !type || !location || !description) {
-      setError("Please fill in all required fields.");
-      return;
-    }
-
-    if (!vacancy) {
-      setError("Please provide job vacancy.");
+    if (!dbUser || role !== "company" || status !== "active") {
+      setMessage("You are not allowed to post jobs.");
       return;
     }
 
@@ -117,18 +122,18 @@ export default function PostJobPage() {
         sector,
         type,
         location,
+        jobVacancy,
         jobTime,
-        jobVacancy: Number(vacancy),
+        jobAddress,
+        salaryMin,
+        salaryMax,
+        salaryCurrency,
+        companyName: dbUser.companyProfile?.companyName || "Unknown Company",
+        companyEmail: dbUser.email,
+        deadline,
         description,
-        salary: {
-          min: salaryMin ? Number(salaryMin) : null,
-          max: salaryMax ? Number(salaryMax) : null,
-          currency: salaryCurrency || "BDT",
-        },
-        company: companyName,
-        companyEmail,
-        postedByUid: user.uid,
-        postedByEmail: user.email,
+        requirements,
+        responsibilities,
       };
 
       const res = await fetch("/api/jobs", {
@@ -140,125 +145,106 @@ export default function PostJobPage() {
       const data = await res.json().catch(() => null);
 
       if (!res.ok) {
-        throw new Error(data?.message || "Failed to post job.");
+        throw new Error(data?.message || "Failed to create job.");
       }
 
-      setSuccess("Job posted successfully!");
-      // Optional: redirect after short delay
+      setMessage("Job posted successfully.");
+      // Reset form
+      setTitle("");
+      setSector(SECTORS[0]);
+      setType(TYPES[0]);
+      setLocation("");
+      setJobVacancy("");
+      setJobTime("");
+      setJobAddress("");
+      setSalaryMin("");
+      setSalaryMax("");
+      setSalaryCurrency("BDT");
+      setDeadline("");
+      setDescription("");
+      setRequirements("");
+      setResponsibilities("");
+
+      // Redirect to jobs page after short delay
       setTimeout(() => {
         router.push("/jobs");
-      }, 1200);
+      }, 1000);
     } catch (err) {
-      console.error(err);
-      setError(err.message || "Something went wrong.");
+      console.error("Job post error:", err);
+      setMessage(err.message || "Something went wrong while posting the job.");
     } finally {
       setSaving(false);
     }
   };
 
-  // Loading state
-  if (authLoading || loadingUser) {
+  // Loading / access states
+  if (authLoading || checkingAccess) {
     return (
-      <main className="max-w-3xl mx-auto px-4 py-16">
-        <div className="text-center text-sm text-gray-600">
-          Loading company information...
-        </div>
+      <main className="max-w-3xl mx-auto px-4 py-8">
+        <p>Checking permission...</p>
       </main>
     );
   }
 
-  // Shows error if user is not allowed
-  if (error && (!dbUser || dbUser.role !== "company" || dbUser.status !== "active")) {
+  if (notAllowed) {
     return (
-      <main className="max-w-3xl mx-auto px-4 py-16">
-        <div className="text-center max-w-md mx-auto">
-          <h1 className="text-xl font-semibold mb-2">Job Posting Restricted</h1>
-          <p className="text-sm text-gray-600 mb-4">{error}</p>
-          <button
-            onClick={() => router.push("/")}
-            className="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
-          >
-            Go back home
-          </button>
+      <main className="min-h-[60vh] flex items-center justify-center px-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-xl font-bold mb-2">
+            You are not allowed to post jobs
+          </h1>
+          <p className="text-sm text-gray-600 mb-4">
+            This page is only available for{" "}
+            <span className="font-semibold">active company accounts</span>. If
+            your status is inactive, please wait for admin approval.
+          </p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="max-w-3xl mx-auto px-4 py-10">
-      <h1 className="text-2xl sm:text-3xl font-bold mb-2">Post a New Job</h1>
-      <p className="text-sm text-gray-600 mb-6">
-        Create a new job posting for candidates on InterviewMate.
+    <main className="max-w-3xl mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold mb-1">Post a New Job</h1>
+      <p className="text-sm text-gray-600 mb-4">
+        Company:{" "}
+        <span className="font-semibold">
+          {dbUser?.companyProfile?.companyName || "Unknown Company"}
+        </span>{" "}
+        ({dbUser?.email})
       </p>
 
-      {error && (
-        <p className="mb-3 text-sm text-red-500 bg-red-50 border border-red-100 rounded-md px-3 py-2">
-          {error}
-        </p>
-      )}
-      {success && (
-        <p className="mb-3 text-sm text-green-600 bg-green-50 border border-green-100 rounded-md px-3 py-2">
-          {success}
+      {message && (
+        <p className="mb-4 text-sm bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+          {message}
         </p>
       )}
 
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-5 bg-white border border-gray-200 rounded-2xl shadow-sm p-5 sm:p-7"
-      >
-        {/* Company info (read-only) */}
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium text-gray-700">
-              Company Name
-            </label>
-            <input
-              type="text"
-              value={companyName}
-              readOnly
-              className="mt-2 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-gray-700">
-              Company Email
-            </label>
-            <input
-              type="email"
-              value={companyEmail}
-              readOnly
-              className="mt-2 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm"
-            />
-          </div>
-        </div>
-
-        {/* Title */}
+      <form onSubmit={handleSubmit} className="space-y-4 bg-white p-4 rounded-xl border">
+        {/* Basic info */}
         <div>
-          <label className="text-sm font-medium text-gray-700">
+          <label className="text-sm font-medium">
             Job Title <span className="text-red-500">*</span>
           </label>
           <input
-            type="text"
+            className="w-full border rounded-md px-3 py-2 text-sm mt-1"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Senior DevOps Engineer"
-            className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="e.g. Senior Software Engineer"
+            required
           />
         </div>
 
-        {/* Sector & Type */}
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="text-sm font-medium text-gray-700">
+            <label className="text-sm font-medium">
               Sector <span className="text-red-500">*</span>
             </label>
             <select
+              className="w-full border rounded-md px-3 py-2 text-sm mt-1"
               value={sector}
               onChange={(e) => setSector(e.target.value)}
-              className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="">Select sector</option>
               {SECTORS.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -267,15 +253,14 @@ export default function PostJobPage() {
             </select>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700">
+            <label className="text-sm font-medium">
               Job Type <span className="text-red-500">*</span>
             </label>
             <select
+              className="w-full border rounded-md px-3 py-2 text-sm mt-1"
               value={type}
               onChange={(e) => setType(e.target.value)}
-              className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="">Select type</option>
               {TYPES.map((t) => (
                 <option key={t} value={t}>
                   {t}
@@ -283,106 +268,160 @@ export default function PostJobPage() {
               ))}
             </select>
           </div>
-        </div>
-
-        {/* Location & Job Time */}
-        <div className="grid sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium text-gray-700">
-              Job Address / Location <span className="text-red-500">*</span>
+            <label className="text-sm font-medium">
+              Location <span className="text-red-500">*</span>
             </label>
             <input
-              type="text"
+              className="w-full border rounded-md px-3 py-2 text-sm mt-1"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. Bashundhara, Dhaka"
-              className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-gray-700">
-              Job Time / Schedule
-            </label>
-            <input
-              type="text"
-              value={jobTime}
-              onChange={(e) => setJobTime(e.target.value)}
-              placeholder="e.g. 9 AM - 6 PM, Sun-Thu"
-              className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="e.g. Banani, Dhaka"
+              required
             />
           </div>
         </div>
 
-        {/* Vacancy & Salary */}
-        <div className="grid sm:grid-cols-2 gap-4">
+        {/* Vacancy / time / address */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="text-sm font-medium text-gray-700">
+            <label className="text-sm font-medium">
               Vacancy <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
-              value={vacancy}
-              onChange={(e) => setVacancy(e.target.value)}
-              min={1}
-              className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              min="1"
+              className="w-full border rounded-md px-3 py-2 text-sm mt-1"
+              value={jobVacancy}
+              onChange={(e) => setJobVacancy(e.target.value)}
+              placeholder="e.g. 3"
+              required
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700">
-              Salary Range
+            <label className="text-sm font-medium">
+              Job Time <span className="text-red-500">*</span>
             </label>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              <input
-                type="number"
-                value={salaryMin}
-                onChange={(e) => setSalaryMin(e.target.value)}
-                placeholder="Min"
-                className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <input
-                type="number"
-                value={salaryMax}
-                onChange={(e) => setSalaryMax(e.target.value)}
-                placeholder="Max"
-                className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <select
-                value={salaryCurrency}
-                onChange={(e) => setSalaryCurrency(e.target.value)}
-                className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="BDT">BDT</option>
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-              </select>
-            </div>
+            <input
+              className="w-full border rounded-md px-3 py-2 text-sm mt-1"
+              value={jobTime}
+              onChange={(e) => setJobTime(e.target.value)}
+              placeholder="e.g. 9:00 AM - 6:00 PM"
+              required
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">
+              Application Deadline <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              className="w-full border rounded-md px-3 py-2 text-sm mt-1"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+              required
+            />
           </div>
         </div>
 
-        {/* Description */}
         <div>
-          <label className="text-sm font-medium text-gray-700">
-            Job Description <span className="text-red-500">*</span>
+          <label className="text-sm font-medium">
+            Job Address <span className="text-red-500">*</span>
           </label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={5}
-            placeholder="Describe responsibilities, requirements, benefits etc."
-            className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          <input
+            className="w-full border rounded-md px-3 py-2 text-sm mt-1"
+            value={jobAddress}
+            onChange={(e) => setJobAddress(e.target.value)}
+            placeholder="e.g. Company head office full address"
+            required
           />
         </div>
 
-        {/* Submit */}
-        <div className="pt-2">
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex items-center justify-center px-6 py-2.5 rounded-full text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 shadow-sm"
-          >
-            {saving ? "Posting job..." : "Post Job"}
-          </button>
+        {/* Salary */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="text-sm font-medium">
+              Salary Min <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              className="w-full border rounded-md px-3 py-2 text-sm mt-1"
+              value={salaryMin}
+              onChange={(e) => setSalaryMin(e.target.value)}
+              placeholder="e.g. 40000"
+              required
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">
+              Salary Max <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              className="w-full border rounded-md px-3 py-2 text-sm mt-1"
+              value={salaryMax}
+              onChange={(e) => setSalaryMax(e.target.value)}
+              placeholder="e.g. 60000"
+              required
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">
+              Currency <span className="text-red-500">*</span>
+            </label>
+            <select
+              className="w-full border rounded-md px-3 py-2 text-sm mt-1"
+              value={salaryCurrency}
+              onChange={(e) => setSalaryCurrency(e.target.value)}
+            >
+              <option value="BDT">BDT</option>
+              <option value="USD">USD</option>
+            </select>
+          </div>
         </div>
+
+        {/* Description / requirements / responsibilities */}
+        <div>
+          <label className="text-sm font-medium">Job Description</label>
+          <textarea
+            className="w-full border rounded-md px-3 py-2 text-sm mt-1 min-h-[80px]"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Short description about the role and responsibilities."
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">
+            Requirements (one per line)
+          </label>
+          <textarea
+            className="w-full border rounded-md px-3 py-2 text-sm mt-1 min-h-[80px]"
+            value={requirements}
+            onChange={(e) => setRequirements(e.target.value)}
+            placeholder={"e.g.\n• 3+ years experience\n• Strong JavaScript skills"}
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">
+            Responsibilities (one per line)
+          </label>
+          <textarea
+            className="w-full border rounded-md px-3 py-2 text-sm mt-1 min-h-[80px]"
+            value={responsibilities}
+            onChange={(e) => setResponsibilities(e.target.value)}
+            placeholder={"e.g.\n• Lead a small engineering team\n• Review pull requests"}
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={saving}
+          className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-60"
+        >
+          {saving ? "Posting..." : "Post Job"}
+        </button>
       </form>
     </main>
   );
