@@ -1,17 +1,29 @@
 // src/app/api/users-jobs-application/route.js
 import { NextResponse } from "next/server";
-import mongoose from "mongoose";
-import { connectDB } from "@/lib/mongodb";
+import { getCollection } from "@/lib/dbConnect";
 
 /**
  * POST /api/users-jobs-application
  *
- * Stores a job application into the "users_jobs_application" collection.
- * Called from the JobDetailsPage "Apply Now" button.
+ * Body expected from JobDetailsPage:
+ * {
+ *   jobId,
+ *   jobTitle,
+ *   company,
+ *   sector,
+ *   type,
+ *   location,
+ *   salary,        // { min, max, currency }
+ *   postedDate,    // string or ISO
+ *   candidateUid,
+ *   candidateEmail,
+ *   candidateName,
+ *   candidatePhone
+ * }
  */
-export async function POST(req) {
+export async function POST(request) {
   try {
-    const body = await req.json();
+    const body = await request.json();
 
     const {
       jobId,
@@ -36,14 +48,13 @@ export async function POST(req) {
       );
     }
 
-    // Connect to Mongo (Mongoose)
-    await connectDB();
+    const applicationsCollection = await getCollection(
+      "users_jobs_application"
+    );
+    const notificationsCollection = await getCollection("notifications");
 
-    // Use native collection from mongoose connection
-    const collection = mongoose.connection.collection("users_jobs_application");
-
-    // Prevent duplicate application for the same job by same user
-    const existing = await collection.findOne({
+    // Avoid duplicate application for same job + same user
+    const existing = await applicationsCollection.findOne({
       jobId,
       candidateUid,
     });
@@ -65,7 +76,6 @@ export async function POST(req) {
       type: type || null,
       location: location || null,
       salary: salary || null, // { min, max, currency }
-
       postedDate: postedDate ? new Date(postedDate) : null,
 
       candidateUid,
@@ -73,25 +83,34 @@ export async function POST(req) {
       candidateName: candidateName || null,
       candidatePhone: candidatePhone || null,
 
-      status: "submitted", // you can later change: submitted / shortlisted / rejected etc.
+      status: "submitted", // you can later change to 'shortlisted', etc.
       createdAt: now,
       updatedAt: now,
     };
 
-    const result = await collection.insertOne(doc);
+    const result = await applicationsCollection.insertOne(doc);
+
+    // Create a notification for this user
+    await notificationsCollection.insertOne({
+      userEmail: candidateEmail,
+      title: "Job application submitted",
+      message: `Your application for "${jobTitle || "a job"}"${
+        company ? ` at ${company}` : ""
+      } has been submitted.`,
+      type: "job_application",
+      link: "/application", // you can change to your own "My Applications" page
+      read: false,
+      createdAt: now,
+    });
 
     return NextResponse.json(
-      {
-        message: "Application created successfully.",
-        _id: result.insertedId,
-        application: doc,
-      },
+      { ok: true, insertedId: result.insertedId },
       { status: 201 }
     );
-  } catch (err) {
-    console.error("POST /api/users-jobs-application error:", err);
+  } catch (error) {
+    console.error("Error creating job application:", error);
     return NextResponse.json(
-      { message: "Internal server error." },
+      { message: "Internal server error" },
       { status: 500 }
     );
   }
@@ -100,21 +119,19 @@ export async function POST(req) {
 /**
  * GET /api/users-jobs-application
  *
- * Optional helper:
- * - /api/users-jobs-application?candidateUid=xxx
- * - /api/users-jobs-application?candidateEmail=xxx
- * - /api/users-jobs-application?jobId=xxx
+ * Optional filters:
+ *  - /api/users-jobs-application?candidateUid=...
+ *  - /api/users-jobs-application?candidateEmail=...
+ *  - /api/users-jobs-application?jobId=...
  */
-export async function GET(req) {
+export async function GET(request) {
   try {
-    await connectDB();
-
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = new URL(request.url);
     const candidateUid = searchParams.get("candidateUid");
     const candidateEmail = searchParams.get("candidateEmail");
     const jobId = searchParams.get("jobId");
 
-    const collection = mongoose.connection.collection("users_jobs_application");
+    const collection = await getCollection("users_jobs_application");
 
     const query = {};
     if (candidateUid) query.candidateUid = candidateUid;
@@ -126,11 +143,16 @@ export async function GET(req) {
       .sort({ createdAt: -1 })
       .toArray();
 
-    return NextResponse.json(applications, { status: 200 });
-  } catch (err) {
-    console.error("GET /api/users-jobs-application error:", err);
+    const clean = applications.map((item) => ({
+      ...item,
+      _id: item._id.toString(),
+    }));
+
+    return NextResponse.json(clean, { status: 200 });
+  } catch (error) {
+    console.error("Error fetching job applications:", error);
     return NextResponse.json(
-      { message: "Internal server error." },
+      { message: "Internal server error" },
       { status: 500 }
     );
   }

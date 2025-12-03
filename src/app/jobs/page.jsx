@@ -6,40 +6,55 @@ import Image from "next/image";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import { useAuth } from "@/context/AuthContext";
 
-// How many jobs per page
+// How many jobs per page to request from the backend
 const PAGE_SIZE = 30;
 
 export default function JobsPage() {
-  // ---------- AUTH & ROLE STATE ----------
-  // Firebase auth user (from context)
+  // =========================================================
+  // AUTH & ROLE STATE
+  // =========================================================
+  // Firebase auth user (from AuthContext)
   const { user, loading: authLoading } = useAuth();
 
-  // MongoDB user doc + role (candidate | hr | company)
-  const [role, setRole] = useState(null);
-  const [roleLoading, setRoleLoading] = useState(true);
-  const [blocked, setBlocked] = useState(false); // if true → show 404-style page
+  // The user document stored in MongoDB (/api/users/me)
+  const [dbUser, setDbUser] = useState(null);
 
-  // ---------- JOB LIST STATE ----------
-  const [jobs, setJobs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedSector, setSelectedSector] = useState("all");
-  const [page, setPage] = useState(1);
+  // Role comes from MongoDB user doc: "candidate" | "hr" | "company" | "admin" | null
+  const [role, setRole] = useState(null);
+
+  // While we are fetching the DB user / role, this stays true
+  const [roleLoading, setRoleLoading] = useState(true);
+
+  // If true, this page is blocked for this role (we show a 404-style screen)
+  const [blocked, setBlocked] = useState(false);
+
+  // =========================================================
+  // JOB LIST STATE
+  // =========================================================
+  const [jobs, setJobs] = useState([]);           // list of job objects
+  const [loading, setLoading] = useState(true);   // jobs loading spinner flag
+  const [selectedSector, setSelectedSector] = useState("all"); // sector filter
+  const [page, setPage] = useState(1);            // current pagination page
   const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
+  const [total, setTotal] = useState(0);          // total number of jobs in DB
 
   // Set browser tab title once on mount
   useEffect(() => {
     document.title = "JobListings | InterviewMate";
   }, []);
 
-  // ---------- LOAD USER ROLE FROM DB ----------
-  // We ask /api/users/me for the role if there is a Firebase user.
-  // If role is "hr" or "company", we mark this page as blocked.
+  // =========================================================
+  // LOAD USER ROLE & STATUS FROM DB (MongoDB)
+  // =========================================================
+  // We call /api/users/me?uid=<firebase uid> and use:
+  //   - data.role   (candidate / hr / company / admin)
+  //   - data.status (active / inactive)
   useEffect(() => {
     if (authLoading) return; // wait until Firebase auth finishes
 
-    // Not logged in → no role restriction (guests can see jobs)
+    // Guest user → no role restriction, can see jobs
     if (!user) {
+      setDbUser(null);
       setRole(null);
       setBlocked(false);
       setRoleLoading(false);
@@ -59,11 +74,13 @@ export default function JobsPage() {
         const data = await res.json();
         if (!active) return;
 
+        setDbUser(data);
         const r = data.role || null;
         setRole(r);
 
-        // HR & Company are not allowed to access /jobs
-        if (r === "hr" || r === "company") {
+        // ❌ HR cannot see jobs page
+        // ✅ Company, candidate, admin etc. can
+        if (r === "hr") {
           setBlocked(true);
         } else {
           setBlocked(false);
@@ -82,12 +99,18 @@ export default function JobsPage() {
     };
   }, [user, authLoading]);
 
-  // ---------- FETCH JOBS FROM API (ONLY IF NOT BLOCKED) ----------
+  // Derived flags for company users
+  const isCompany = role === "company";
+  const isCompanyActive = isCompany && dbUser?.status === "active";
+
+  // =========================================================
+  // FETCH JOBS FROM API (ONLY IF NOT BLOCKED)
+  // =========================================================
   useEffect(() => {
     // Wait until auth + role are decided
     if (authLoading || roleLoading) return;
 
-    // HR or Company: do NOT fetch jobs
+    // HR blocked completely → do not load jobs
     if (blocked) {
       setJobs([]);
       setLoading(false);
@@ -124,7 +147,10 @@ export default function JobsPage() {
     fetchJobs();
   }, [selectedSector, page, authLoading, roleLoading, blocked]);
 
-  // Collect unique sectors from current page (for filter dropdown)
+  // =========================================================
+  // SECTORS (FILTER DROPDOWN)
+  // =========================================================
+  // Build a unique list of all sectors from current page's jobs
   const sectors = useMemo(() => {
     const s = new Set(jobs.map((job) => job.sector).filter(Boolean));
     return ["all", ...Array.from(s)];
@@ -138,8 +164,12 @@ export default function JobsPage() {
     setPage(1);
   }
 
-  // ---------- LOADING STATE: AUTH OR ROLE ----------
+  // =========================================================
+  // LOADING STATE: AUTH OR ROLE
+  // =========================================================
   if (authLoading || roleLoading) {
+    // While we don't know the role yet, we show only a spinner,
+    // so restricted content does not flash.
     return (
       <main className="max-w-6xl mx-auto px-4 py-10">
         <div className="flex justify-center">
@@ -149,8 +179,10 @@ export default function JobsPage() {
     );
   }
 
-  // ---------- ROLE BLOCK: HR / COMPANY → 404 STYLE ----------
-  // This prevents HR or Company from seeing /jobs even if they type URL manually.
+  // =========================================================
+  // ROLE BLOCK: HR → 404 STYLE
+  // =========================================================
+  // HR users are not allowed to see the jobs list at all.
   if (blocked) {
     return (
       <main className="min-h-[60vh] flex items-center justify-center px-4">
@@ -172,10 +204,12 @@ export default function JobsPage() {
     );
   }
 
-  // ---------- NORMAL JOBS PAGE (CANDIDATE OR GUEST) ----------
+  // =========================================================
+  // NORMAL JOBS PAGE (Candidate / Company / Guest / Admin)
+  // =========================================================
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
-      {/* Header + sector filter */}
+      {/* Header + sector filter + Post Job button (for company) */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold mb-1">Latest Jobs</h1>
@@ -184,19 +218,49 @@ export default function JobsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium">Sector:</label>
-          <select
-            value={selectedSector}
-            onChange={handleSectorChange}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
-          >
-            {sectors.map((sector) => (
-              <option key={sector} value={sector}>
-                {sector === "all" ? "All sectors" : sector}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+          {/* Sector filter */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium">Sector:</label>
+            <select
+              value={selectedSector}
+              onChange={handleSectorChange}
+              className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
+            >
+              {sectors.map((sector) => (
+                <option key={sector} value={sector}>
+                  {sector === "all" ? "All sectors" : sector}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Company-only: "Post a Job" button.
+              If company.status !== "active", button is disabled and shows alert. */}
+          {isCompany && (
+            <div className="flex justify-end">
+              {isCompanyActive ? (
+                <Link
+                  href="/jobs/post"
+                  className="inline-flex items-center px-4 py-2 rounded-md bg-green-600 text-white text-sm font-semibold hover:bg-green-700 shadow-sm"
+                >
+                  Post a Job
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    alert(
+                      "Your company profile is not active yet. Please wait for admin approval before posting jobs."
+                    )
+                  }
+                  className="inline-flex items-center px-4 py-2 rounded-md bg-gray-300 text-gray-700 text-sm font-semibold cursor-not-allowed"
+                >
+                  Post a Job (inactive account)
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -212,7 +276,10 @@ export default function JobsPage() {
         <p className="text-gray-500">No jobs found for this sector.</p>
       )}
 
-      {/* Cards grid */}
+      {/* =====================================================
+          JOB CARDS GRID
+          Each card now also shows Vacancy (jobVacancy)
+         ===================================================== */}
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 mb-8">
         {jobs.map((job) => {
           const {
@@ -227,6 +294,7 @@ export default function JobsPage() {
             location,
             salary,
             postedDate,
+            jobVacancy,   // 👈 NEW FIELD from DB
           } = job;
 
           const jobIdForUrl = id || _id;
@@ -238,6 +306,7 @@ export default function JobsPage() {
               href={`/jobs/${jobIdForUrl}`}
               className="group border border-gray-200 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col overflow-hidden"
             >
+              {/* Company logo + title */}
               <div className="flex items-center gap-3 px-4 pt-4">
                 {logo ? (
                   <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex-shrink-0">
@@ -265,6 +334,7 @@ export default function JobsPage() {
                 </div>
               </div>
 
+              {/* Small meta chips: location, type, vacancy */}
               <div className="px-4 mt-3 flex flex-wrap gap-2 text-xs text-gray-600">
                 {location && (
                   <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1">
@@ -276,8 +346,16 @@ export default function JobsPage() {
                     💼 {type}
                   </span>
                 )}
+                {jobVacancy !== undefined &&
+                  jobVacancy !== null &&
+                  jobVacancy !== "" && (
+                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1">
+                      👥 Vacancy: {jobVacancy}
+                    </span>
+                  )}
               </div>
 
+              {/* Bottom row: salary + posted date */}
               <div className="px-4 py-3 mt-auto flex items-center justify-between text-xs text-gray-600 border-t border-gray-100">
                 {salary && (
                   <span>
@@ -307,10 +385,10 @@ export default function JobsPage() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => page > 1 && setPage((p) => p - 1)}
-              disabled={page <= 1}
+              onClick={() => canPrev && setPage((p) => p - 1)}
+              disabled={!canPrev}
               className={`px-3 py-1.5 rounded-full text-sm border ${
-                page > 1
+                canPrev
                   ? "bg-white hover:bg-gray-50"
                   : "bg-gray-100 text-gray-400 cursor-not-allowed"
               }`}
@@ -318,10 +396,10 @@ export default function JobsPage() {
               ← Previous
             </button>
             <button
-              onClick={() => page < totalPages && setPage((p) => p + 1)}
-              disabled={page >= totalPages}
+              onClick={() => canNext && setPage((p) => p + 1)}
+              disabled={!canNext}
               className={`px-3 py-1.5 rounded-full text-sm border ${
-                page < totalPages
+                canNext
                   ? "bg-white hover:bg-gray-50"
                   : "bg-gray-100 text-gray-400 cursor-not-allowed"
               }`}

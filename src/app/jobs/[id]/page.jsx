@@ -92,22 +92,64 @@ export default function JobDetailsPage({ params }) {
     };
   }, [user]);
 
+  // --------- Check if user already applied to this job ----------
+  useEffect(() => {
+    if (!job || !user || !role || role !== "candidate") return;
+
+    let active = true;
+
+    const checkExistingApplication = async () => {
+      try {
+        const jobIdForApplication = job._id || job.id;
+        if (!jobIdForApplication) return;
+
+        const params = new URLSearchParams();
+        params.set("candidateUid", user.uid);
+        params.set("jobId", jobIdForApplication);
+
+        const res = await fetch(
+          `/api/users-jobs-application?${params.toString()}`
+        );
+        if (!res.ok) return;
+
+        const data = await res.json();
+        if (!active) return;
+
+        if (Array.isArray(data) && data.length > 0) {
+          setHasApplied(true);
+          setApplyMessage("You have already applied for this job.");
+        }
+      } catch (err) {
+        console.error("Error checking existing application:", err);
+      }
+    };
+
+    checkExistingApplication();
+
+    return () => {
+      active = false;
+    };
+  }, [job, user, role]);
+
   // --------- Derived helpers ----------
-  const canApply = !!user && role === "candidate"; // only logged-in candidates
+  const canApply = !!user && role === "candidate";
 
   // --------- Handle apply ----------
   const handleApply = async () => {
     setApplyMessage("");
 
-    // If not logged in, send them to login
     if (!user) {
       router.push("/authentication/login");
       return;
     }
 
-    // Safety check: only candidate role can apply
     if (role && role !== "candidate") {
       setApplyMessage("Only candidate accounts can apply for jobs.");
+      return;
+    }
+
+    if (hasApplied) {
+      setApplyMessage("You have already applied for this job.");
       return;
     }
 
@@ -118,7 +160,6 @@ export default function JobDetailsPage({ params }) {
     try {
       const candidateProfile = dbUser?.candidateProfile || {};
 
-      // Build a nice full name
       const fullNameFromProfile =
         (candidateProfile.firstName || "") +
         (candidateProfile.lastName ? ` ${candidateProfile.lastName}` : "");
@@ -144,6 +185,8 @@ export default function JobDetailsPage({ params }) {
         location: job.location,
         salary: job.salary,
         postedDate: job.postedDate,
+        jobVacancy: job.jobVacancy ?? null,
+        jobTime: job.jobTime ?? null,
 
         candidateUid: user.uid,
         candidateEmail: dbUser?.email || user.email,
@@ -151,7 +194,6 @@ export default function JobDetailsPage({ params }) {
         candidatePhone,
       };
 
-      // POST to your API route that writes into `users_jobs_application`
       const res = await fetch("/api/users-jobs-application", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -161,6 +203,14 @@ export default function JobDetailsPage({ params }) {
       const data = await res.json().catch(() => null);
 
       if (!res.ok) {
+        if (res.status === 409) {
+          setHasApplied(true);
+          setApplyMessage(
+            data?.message || "You have already applied for this job."
+          );
+          return;
+        }
+
         throw new Error(data?.message || "Failed to apply for this job.");
       }
 
@@ -210,6 +260,8 @@ export default function JobDetailsPage({ params }) {
     description,
     requirements,
     responsibilities,
+    jobTime,
+    jobVacancy,
   } = job;
 
   const logo = logoUrl || companyLogo || null;
@@ -248,7 +300,7 @@ export default function JobDetailsPage({ params }) {
           </div>
         </div>
 
-        {/* Meta info */}
+        {/* Meta info (now with time & vacancy) */}
         <div className="mt-4 flex flex-wrap gap-2 text-xs text-gray-700">
           {location && (
             <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1">
@@ -258,6 +310,16 @@ export default function JobDetailsPage({ params }) {
           {type && (
             <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1">
               💼 {type}
+            </span>
+          )}
+          {jobTime && (
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1">
+              ⏰ {jobTime}
+            </span>
+          )}
+          {jobVacancy !== undefined && jobVacancy !== null && (
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1">
+              👥 Vacancy: {jobVacancy}
             </span>
           )}
           {salary && (
@@ -306,7 +368,6 @@ export default function JobDetailsPage({ params }) {
 
         {/* Apply section */}
         <div className="mt-6 space-y-2">
-          {/* Only show apply button for logged-in candidates */}
           {canApply && (
             <button
               onClick={handleApply}
@@ -314,14 +375,13 @@ export default function JobDetailsPage({ params }) {
               className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {hasApplied
-                ? "Application Sent"
+                ? "Already applied"
                 : applyLoading
                 ? "Applying..."
                 : "Apply Now"}
             </button>
           )}
 
-          {/* If not logged in, you can optionally show a hint */}
           {!user && (
             <p className="text-xs text-gray-500">
               Please{" "}
@@ -335,7 +395,6 @@ export default function JobDetailsPage({ params }) {
             </p>
           )}
 
-          {/* If logged in but not candidate */}
           {user && role && role !== "candidate" && (
             <p className="text-xs text-gray-500">
               Only{" "}
@@ -344,7 +403,6 @@ export default function JobDetailsPage({ params }) {
             </p>
           )}
 
-          {/* Feedback message */}
           {applyMessage && (
             <p className="text-xs mt-1 text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
               {applyMessage}
