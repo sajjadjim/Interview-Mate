@@ -72,7 +72,17 @@ export default function JobsPostPage() {
     const checkUser = async () => {
       try {
         setCheckingAccess(true);
-        const res = await fetch(`/api/users/me?uid=${user.uid}`);
+        const idToken = await user.getIdToken(); // from Firebase client SDK
+
+const res = await fetch("/api/users/me", {
+  method: "GET", // or PATCH
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${idToken}`,   // 👈 important
+  },
+  // body: JSON.stringify(...profile data...)   // for PATCH only
+});
+
         if (!res.ok) {
           console.error("Failed to load user for job post page.");
           setNotAllowed(true);

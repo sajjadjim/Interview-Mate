@@ -15,7 +15,7 @@
 .env.production.local
 # testing
 /coverage
-
+interview-mate.json
 
 # vscode file settings
 .vscode

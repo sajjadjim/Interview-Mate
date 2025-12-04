@@ -1,26 +1,70 @@
+// src/app/api/users/me/route.js
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/dbConnect";
+import { verifyFirebaseIdToken } from "@/app/lib/firebaseAdmin";
 
+
+/**
+ * Helper: read & verify Firebase ID token from Authorization header.
+ * Returns { decodedToken } on success OR { error: NextResponse } on failure.
+ */
+async function requireFirebaseUser(request) {
+  const authHeader =
+    request.headers.get("authorization") ||
+    request.headers.get("Authorization");
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return {
+      decodedToken: null,
+      error: NextResponse.json(
+        { message: "Unauthorized" },
+        { status: 401 }
+      ),
+    };
+  }
+
+  const idToken = authHeader.split(" ")[1];
+  const decodedToken = await verifyFirebaseIdToken(idToken);
+
+  if (!decodedToken) {
+    return {
+      decodedToken: null,
+      error: NextResponse.json(
+        { message: "Invalid or expired token" },
+        { status: 401 }
+      ),
+    };
+  }
+
+  return { decodedToken, error: null };
+}
+
+/**
+ * GET /api/users/me
+ *
+ * 🔒 Only returns the current logged-in user's document.
+ * No token → 401. No more reading other users by uid.
+ */
 export async function GET(request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const uid = searchParams.get("uid");
+    const { decodedToken, error } = await requireFirebaseUser(request);
+    if (error) return error;
 
-    if (!uid) {
-      return NextResponse.json(
-        { message: "uid is required" },
-        { status: 400 }
-      );
-    }
+    const uid = decodedToken.uid;
 
     const usersCollection = await getCollection("users");
     const user = await usersCollection.findOne({ uid });
 
     if (!user) {
-      return NextResponse.json({ message: "User not found" }, { status: 404 });
+      return NextResponse.json(
+        { message: "User not found" },
+        { status: 404 }
+      );
     }
 
+    // clean up ObjectId for JSON
     user._id = user._id.toString();
+
     return NextResponse.json(user, { status: 200 });
   } catch (error) {
     console.error("Error in GET /api/users/me:", error);
@@ -31,38 +75,53 @@ export async function GET(request) {
   }
 }
 
+/**
+ * PATCH /api/users/me
+ *
+ * 🔒 Only logged-in user can update **their own** profile.
+ * We ignore any uid from the body and always use token uid.
+ */
 export async function PATCH(request) {
   try {
-    const body = await request.json();
-    const { uid, candidateProfile, hrProfile, companyProfile } = body;
+    const { decodedToken, error } = await requireFirebaseUser(request);
+    if (error) return error;
 
-    if (!uid) {
-      return NextResponse.json(
-        { message: "uid is required" },
-        { status: 400 }
-      );
-    }
+    const uid = decodedToken.uid;
+
+    const body = await request.json();
+    const { candidateProfile, hrProfile, companyProfile } = body || {};
 
     const usersCollection = await getCollection("users");
 
-    const update = { $set: { updatedAt: new Date() } };
+    const updateDoc = {
+      $set: {
+        updatedAt: new Date(),
+      },
+    };
 
     if (candidateProfile) {
-      update.$set.candidateProfile = candidateProfile;
-    }
-    if (hrProfile) {
-      update.$set.hrProfile = hrProfile;
-      // status stays inactive until team verifies (you can change here later)
-    }
-    if (companyProfile) {
-      update.$set.companyProfile = companyProfile;
-      // same here: status stays inactive until verification
+      updateDoc.$set.candidateProfile = candidateProfile;
     }
 
-    const result = await usersCollection.updateOne({ uid }, update);
+    if (hrProfile) {
+      updateDoc.$set.hrProfile = hrProfile;
+      // you can also force status to remain "inactive" here if needed
+      // updateDoc.$set.status = "inactive";
+    }
+
+    if (companyProfile) {
+      updateDoc.$set.companyProfile = companyProfile;
+      // same: keep status inactive until manual verification
+      // updateDoc.$set.status = "inactive";
+    }
+
+    const result = await usersCollection.updateOne({ uid }, updateDoc);
 
     if (result.matchedCount === 0) {
-      return NextResponse.json({ message: "User not found" }, { status: 404 });
+      return NextResponse.json(
+        { message: "User not found" },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({ ok: true }, { status: 200 });

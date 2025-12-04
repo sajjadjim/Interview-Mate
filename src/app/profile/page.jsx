@@ -98,7 +98,17 @@ export default function ProfilePage() {
       setSuccess("");
 
       try {
-        const res = await fetch(`/api/users/me?uid=${user.uid}`);
+        const idToken = await user.getIdToken(); // from Firebase client SDK
+
+const res = await fetch("/api/users/me", {
+  method: "GET", // or PATCH
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${idToken}`,   // 👈 important
+  },
+  // body: JSON.stringify(...profile data...)   // for PATCH only
+});
+
         if (!res.ok) {
           setError("Failed to load profile.");
           setLoadingProfile(false);
