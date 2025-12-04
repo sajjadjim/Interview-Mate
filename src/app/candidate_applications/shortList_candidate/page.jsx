@@ -1,36 +1,37 @@
+// src/app/shortList_candidate/page.jsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-
+import { motion } from "framer-motion";
+import { useAuth } from "@/context/AuthContext";
 
 import {
   Building2,
+  Users,
   Briefcase,
   CalendarDays,
-  Clock,
   MapPin,
+  Clock,
+  Search,
   Mail,
   Phone,
   User as UserIcon,
-  BadgeCheck,
   FileText,
-  Search,
 } from "lucide-react";
 import LoadingSpinner from "@/app/components/ui/LoadingSpinner";
-import { useAuth } from "@/context/AuthContext";
 
 const PAGE_SIZE = 10;
 
-export default function ShortListCandidatePage() {
+export default function ShortListCandidatesPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [dbUser, setDbUser] = useState(null);
   const [roleLoading, setRoleLoading] = useState(true);
 
-  const [candidates, setCandidates] = useState([]);
-  const [total, setTotal] = useState(0);
+  const [shortlisted, setShortlisted] = useState([]);
+  const [totalShortlisted, setTotalShortlisted] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -38,6 +39,7 @@ export default function ShortListCandidatePage() {
   const [error, setError] = useState("");
 
   const [searchEmail, setSearchEmail] = useState("");
+  const [selectedSector, setSelectedSector] = useState("all");
 
   useEffect(() => {
     document.title = "Shortlisted Candidates | InterviewMate";
@@ -50,7 +52,7 @@ export default function ShortListCandidatePage() {
     }
   }, [authLoading, user, router]);
 
-  // 2) Load DB user (role/status)
+  // 2) Load Mongo user doc (to get role + status)
   useEffect(() => {
     const loadUserDoc = async () => {
       if (authLoading || !user) return;
@@ -61,7 +63,9 @@ export default function ShortListCandidatePage() {
 
         const token = await user.getIdToken();
         const res = await fetch("/api/users/me", {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
 
         if (!res.ok) {
@@ -84,7 +88,7 @@ export default function ShortListCandidatePage() {
   const role = dbUser?.role;
   const status = dbUser?.status || "unknown";
 
-  // 3) Non-company users -> 404
+  // 3) Non-company users -> redirect to 404 (hard-block)
   useEffect(() => {
     if (!authLoading && !roleLoading && user && dbUser) {
       if (role !== "company") {
@@ -93,22 +97,24 @@ export default function ShortListCandidatePage() {
     }
   }, [authLoading, roleLoading, user, dbUser, role, router]);
 
-  // 4) Load shortlisted candidates
+  // 4) Load shortlisted candidates for this company
   useEffect(() => {
-    const loadData = async () => {
+    const loadShortlist = async () => {
       if (!user || !dbUser || role !== "company") return;
 
       setLoading(true);
       setError("");
 
       try {
+        const email = dbUser.email || user.email;
+
         const params = new URLSearchParams();
+        params.set("email", email);
         params.set("page", String(page));
         params.set("limit", String(PAGE_SIZE));
-        params.set("companyEmail", user.email);
 
         const res = await fetch(
-          `/api/company/shortlist-candidates?${params.toString()}`
+          `/api/company/shortlist?${params.toString()}`
         );
 
         if (!res.ok) {
@@ -119,8 +125,8 @@ export default function ShortListCandidatePage() {
         }
 
         const data = await res.json();
-        setCandidates(data.candidates || []);
-        setTotal(data.total || 0);
+        setShortlisted(data.shortlisted || []);
+        setTotalShortlisted(data.totalShortlisted || 0);
         setTotalPages(data.totalPages || 1);
       } catch (err) {
         console.error(err);
@@ -131,23 +137,48 @@ export default function ShortListCandidatePage() {
     };
 
     if (!authLoading && !roleLoading && role === "company") {
-      loadData();
+      loadShortlist();
     }
   }, [authLoading, roleLoading, role, user, dbUser, page]);
-
-  // Filter by email (client-side)
-  const filteredCandidates = useMemo(() => {
-    if (!searchEmail.trim()) return candidates;
-    const term = searchEmail.trim().toLowerCase();
-    return candidates.filter((c) =>
-      c.candidateEmail?.toLowerCase().includes(term)
-    );
-  }, [candidates, searchEmail]);
 
   const canPrev = page > 1;
   const canNext = page < totalPages;
 
-  // While user/role loading
+  // --- Sector options from current page data ---
+  const sectorOptions = useMemo(() => {
+    const set = new Set();
+    shortlisted.forEach((s) => {
+      if (s.jobSector) set.add(s.jobSector);
+    });
+    return ["all", ...Array.from(set).sort()];
+  }, [shortlisted]);
+
+  // Reset filters page when email/sector changes
+  useEffect(() => {
+    // we keep server page but you can also reset to page 1 if you want
+    // setPage(1);
+  }, [searchEmail, selectedSector]);
+
+  const filteredShortlisted = useMemo(() => {
+    let base = shortlisted;
+
+    if (selectedSector !== "all") {
+      base = base.filter((s) => s.jobSector === selectedSector);
+    }
+
+    if (searchEmail.trim()) {
+      const term = searchEmail.trim().toLowerCase();
+      base = base.filter(
+        (s) =>
+          s.candidateEmail?.toLowerCase().includes(term) ||
+          s.candidateName?.toLowerCase().includes(term)
+      );
+    }
+
+    return base;
+  }, [shortlisted, selectedSector, searchEmail]);
+
+  // While auth/role info is loading, hide everything
   if (authLoading || roleLoading || (user && !dbUser)) {
     return (
       <main className="max-w-5xl mx-auto px-4 py-16">
@@ -161,15 +192,16 @@ export default function ShortListCandidatePage() {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10">
       <div className="max-w-6xl mx-auto space-y-8">
-        {/* Header */}
+        {/* Header + status */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
               Shortlisted Candidates
             </h1>
             <p className="text-sm text-slate-600 mt-1">
-              View all candidates shortlisted by your company. Quickly find
-              strong profiles using search and filters.
+              These are the candidates you have shortlisted from your job
+              applications. Filter by job sector or search by email to find
+              profiles quickly.
             </p>
           </div>
 
@@ -194,6 +226,54 @@ export default function ShortListCandidatePage() {
           )}
         </div>
 
+        {/* Warning if company is inactive */}
+        {status !== "active" && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs sm:text-sm text-amber-800">
+            Your company account is currently <strong>{status}</strong>. You can
+            see shortlisted candidates, but some actions may be limited until
+            verification is complete.
+          </div>
+        )}
+
+        {/* Summary cards */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="rounded-xl bg-white border border-slate-200 p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
+              <Users size={20} className="text-blue-600" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Shortlisted candidates</p>
+              <p className="text-xl font-semibold text-slate-900">
+                {totalShortlisted}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-white border border-slate-200 p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-emerald-50 flex items-center justify-center">
+              <Briefcase size={20} className="text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Sectors (current page)</p>
+              <p className="text-xl font-semibold text-slate-900">
+                {sectorOptions.length - 1}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-white border border-slate-200 p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-indigo-50 flex items-center justify-center">
+              <Clock size={20} className="text-indigo-600" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Page</p>
+              <p className="text-xl font-semibold text-slate-900">
+                {page} / {totalPages}
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Error */}
         {error && (
           <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
@@ -211,38 +291,60 @@ export default function ShortListCandidatePage() {
           </div>
         )}
 
-        {/* Search + list */}
+        {/* List */}
         {!loading && (
           <section className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Shortlisted list (sorted by job sector)
+                </h2>
                 <p className="text-xs sm:text-sm text-slate-600">
-                  Total shortlisted:{" "}
-                  <span className="font-semibold text-slate-900">
-                    {total}
-                  </span>
+                  Filter by sector and search by candidate email or name.
                 </p>
               </div>
-              <div className="w-full sm:w-72">
-                <div className="relative">
-                  <Search
-                    size={16}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-                  <input
-                    type="text"
-                    value={searchEmail}
-                    onChange={(e) => setSearchEmail(e.target.value)}
-                    placeholder="Search shortlisted by email"
-                    className="w-full pl-8 pr-3 py-2 rounded-full border border-slate-200 bg-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
+
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                {/* Sector filter */}
+                <div className="w-full sm:w-52">
+                  <select
+                    value={selectedSector}
+                    onChange={(e) => setSelectedSector(e.target.value)}
+                    className="w-full border border-slate-200 bg-white rounded-full px-3 py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="all">All sectors</option>
+                    {sectorOptions
+                      .filter((sec) => sec !== "all")
+                      .map((sec) => (
+                        <option key={sec} value={sec}>
+                          {sec}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                {/* Search by email */}
+                <div className="w-full sm:w-64">
+                  <div className="relative">
+                    <Search
+                      size={16}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+                    <input
+                      type="text"
+                      value={searchEmail}
+                      onChange={(e) => setSearchEmail(e.target.value)}
+                      placeholder="Search by email or name"
+                      className="w-full pl-8 pr-3 py-2 rounded-full border border-slate-200 bg-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
-            {filteredCandidates.length === 0 ? (
+            {filteredShortlisted.length === 0 ? (
               <div className="text-center py-8 text-sm text-slate-500 bg-white rounded-xl border border-slate-200">
-                No shortlisted candidates found yet.
+                No shortlisted candidates found for this selection.
               </div>
             ) : (
               <>
@@ -257,21 +359,27 @@ export default function ShortListCandidatePage() {
                           Job
                         </th>
                         <th className="px-4 py-3 text-left font-semibold">
-                          Shortlisted On
+                          Sector & Dates
                         </th>
                         <th className="px-4 py-3 text-left font-semibold">
-                          Status
+                          CV
                         </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredCandidates.map((c, index) => {
-                        const shortlistedTime =
-                          c.createdAt || c.appliedAt || null;
+                      {filteredShortlisted.map((item, index) => {
+                        const applied = item.appliedAt || item.createdAt;
+                        const shortlistedAt = item.shortlistedAt;
 
                         return (
-                          <tr
-                            key={c._id}
+                          <motion.tr
+                            key={item._id}
+                            initial={{ opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{
+                              duration: 0.2,
+                              delay: index * 0.02,
+                            }}
                             className={
                               index % 2 === 0
                                 ? "bg-white"
@@ -287,45 +395,29 @@ export default function ShortListCandidatePage() {
                                     className="text-slate-500"
                                   />
                                   <span className="font-medium text-slate-900">
-                                    {c.candidateName || "Unnamed candidate"}
-                                  </span>
-                                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                    <BadgeCheck size={10} />
-                                    Shortlisted
+                                    {item.candidateName || "Unnamed candidate"}
                                   </span>
                                 </div>
                                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600">
-                                  {c.candidateEmail && (
+                                  {item.candidateEmail && (
                                     <span className="flex items-center gap-1">
                                       <Mail size={11} />
-                                      {c.candidateEmail}
+                                      {item.candidateEmail}
                                     </span>
                                   )}
-                                  {c.candidatePhone && (
+                                  {item.candidatePhone && (
                                     <span className="flex items-center gap-1">
                                       <Phone size={11} />
-                                      {c.candidatePhone}
+                                      {item.candidatePhone}
                                     </span>
                                   )}
-                                  {c.candidateAddress && (
+                                  {item.candidateAddress && (
                                     <span className="flex items-center gap-1">
                                       <MapPin size={11} />
-                                      {c.candidateAddress}
+                                      {item.candidateAddress}
                                     </span>
                                   )}
                                 </div>
-
-                                {c.resumeUrl && (
-                                  <a
-                                    href={c.resumeUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-[11px] text-indigo-600 hover:underline mt-0.5"
-                                  >
-                                    <FileText size={11} />
-                                    <span>View CV / Resume</span>
-                                  </a>
-                                )}
                               </div>
                             </td>
 
@@ -335,62 +427,87 @@ export default function ShortListCandidatePage() {
                                 <div className="flex items-center gap-1.5 text-slate-800">
                                   <Briefcase size={13} />
                                   <span className="font-medium">
-                                    {c.jobTitle}
+                                    {item.jobTitle}
                                   </span>
                                 </div>
                                 <div className="text-[11px] text-slate-500">
-                                  <span>{c.company}</span>
-                                  {c.location && (
+                                  <span>{item.companyName || item.company}</span>
+                                  {item.jobLocation && (
                                     <>
                                       {" "}
-                                      • <span>{c.location}</span>
+                                      • <span>{item.jobLocation}</span>
                                     </>
                                   )}
-                                  {c.type && (
+                                  {item.jobType && (
                                     <>
                                       {" "}
-                                      • <span>{c.type}</span>
+                                      • <span>{item.jobType}</span>
                                     </>
                                   )}
                                 </div>
                               </div>
                             </td>
 
-                            {/* Shortlisted on */}
+                            {/* Sector & Dates */}
                             <td className="px-4 py-3 align-top">
-                              <div className="flex flex-col text-[11px] text-slate-600">
-                                <div className="flex items-center gap-1.5">
-                                  <CalendarDays size={12} />
-                                  <span>
-                                    {shortlistedTime
-                                      ? new Date(
-                                          shortlistedTime
-                                        ).toLocaleDateString()
-                                      : "N/A"}
-                                  </span>
-                                </div>
-                                {shortlistedTime && (
-                                  <div className="flex items-center gap-1.5 mt-0.5 text-slate-500">
+                              <div className="flex flex-col gap-1 text-[11px] text-slate-600">
+                                {item.jobSector && (
+                                  <div className="flex items-center gap-1.5">
+                                    <Briefcase size={12} />
+                                    <span>{item.jobSector}</span>
+                                  </div>
+                                )}
+
+                                {applied && (
+                                  <div className="flex items-center gap-1.5">
+                                    <CalendarDays size={12} />
+                                    <span>
+                                      Applied:{" "}
+                                      {new Date(
+                                        applied
+                                      ).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {shortlistedAt && (
+                                  <div className="flex items-center gap-1.5 text-slate-500">
                                     <Clock size={12} />
                                     <span>
-                                      Time:{" "}
+                                      Shortlisted:{" "}
                                       {new Date(
-                                        shortlistedTime
-                                      ).toLocaleTimeString()}
+                                        shortlistedAt
+                                      ).toLocaleDateString()}
                                     </span>
                                   </div>
                                 )}
                               </div>
                             </td>
 
-                            {/* Status */}
+                            {/* CV */}
                             <td className="px-4 py-3 align-top">
-                              <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                <BadgeCheck size={12} />
-                                {c.status || "shortlisted"}
-                              </span>
+                              {item.resumeUrl ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    window.open(
+                                      item.resumeUrl,
+                                      "_blank",
+                                      "noopener,noreferrer"
+                                    )
+                                  }
+                                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 text-[11px] text-slate-700 hover:bg-slate-50"
+                                >
+                                  <FileText size={12} />
+                                  View CV
+                                </button>
+                              ) : (
+                                <span className="text-[11px] text-slate-400">
+                                  No CV provided
+                                </span>
+                              )}
                             </td>
-                          </tr>
+                          </motion.tr>
                         );
                       })}
                     </tbody>
@@ -401,11 +518,8 @@ export default function ShortListCandidatePage() {
                 {totalPages > 1 && (
                   <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
                     <div className="text-xs text-slate-500">
-                      Page {page} of {totalPages} • {total} shortlisted
-                      {total !== 1 && " candidates"}
-                      {searchEmail
-                        ? ` (filtered by "${searchEmail}")`
-                        : ""}
+                      Page {page} of {totalPages} • {totalShortlisted} total
+                      shortlisted
                     </div>
                     <div className="flex items-center gap-2">
                       <button

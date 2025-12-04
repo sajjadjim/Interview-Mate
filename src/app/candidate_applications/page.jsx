@@ -1,4 +1,4 @@
-// src/app/candidate_applications/page.jsx
+// src/app/shortList_candidate/page.jsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -17,45 +17,35 @@ import {
   Mail,
   Phone,
   User as UserIcon,
-  BadgeCheck,
   FileText,
-  Star,
-  Trash2,
+  BadgeCheck,
 } from "lucide-react";
 
-const JOBS_PAGE_SIZE = 9;
-const APPS_PAGE_SIZE = 10;
+const PAGE_SIZE = 10;
 
-export default function CandidateApplicationsPage() {
+export default function ShortListedCandidatesPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [dbUser, setDbUser] = useState(null);
   const [roleLoading, setRoleLoading] = useState(true);
 
-  const [jobs, setJobs] = useState([]);
-  const [applicationsPerJob, setApplicationsPerJob] = useState({});
-  const [totalJobs, setTotalJobs] = useState(0);
-  const [totalApplications, setTotalApplications] = useState(0);
-  const [jobsPage, setJobsPage] = useState(1);
-  const [jobsTotalPages, setJobsTotalPages] = useState(1);
-
-  const [applicants, setApplicants] = useState([]);
+  // All shortlisted records from cv_shortListed_database
+  const [shortlisted, setShortlisted] = useState([]);
+  const [totalShortlisted, setTotalShortlisted] = useState(0);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // applicants search & pagination & job filter
+  // filters
   const [searchEmail, setSearchEmail] = useState("");
-  const [appsPage, setAppsPage] = useState(1);
-  const [selectedJobId, setSelectedJobId] = useState("all");
+  const [selectedSector, setSelectedSector] = useState("all");
 
-  // shortlist & delete loading states per application
-  const [shortlistLoading, setShortlistLoading] = useState({});
-  const [deleteLoading, setDeleteLoading] = useState({});
+  // pagination
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
-    document.title = "Candidate Applications | InterviewMate";
+    document.title = "Shortlisted Candidates | InterviewMate";
   }, []);
 
   // 1) Redirect unauthenticated users to login
@@ -110,97 +100,92 @@ export default function CandidateApplicationsPage() {
     }
   }, [authLoading, roleLoading, user, dbUser, role, router]);
 
-  // 4) Load jobs + applicants for this company
+  // 4) Load shortlisted candidates for this company (from cv_shortListed_database)
   useEffect(() => {
-    const loadData = async () => {
+    const loadShortlist = async () => {
       if (!user || !dbUser || role !== "company") return;
 
       setLoading(true);
       setError("");
 
       try {
-        const params = new URLSearchParams();
-        params.set("page", String(jobsPage));
-        params.set("limit", String(JOBS_PAGE_SIZE));
-        // backend will check this email belongs to a company account
-        params.set("email", dbUser.email || user.email);
+        const email = dbUser.email || user.email;
 
-        const res = await fetch(
-          `/api/company/candidate-applications?${params.toString()}`
-        );
+        const params = new URLSearchParams();
+        params.set("email", email);
+
+        const res = await fetch(`/api/company/shortlist?${params.toString()}`);
 
         if (!res.ok) {
           const data = await res.json().catch(() => null);
           throw new Error(
-            data?.message || "Failed to load candidate applications."
+            data?.message || "Failed to load shortlisted candidates."
           );
         }
 
         const data = await res.json();
-        setJobs(data.jobs || []);
-        setApplicationsPerJob(data.applicationsPerJob || {});
-        setTotalJobs(data.totalJobs || 0);
-        setTotalApplications(data.totalApplications || 0);
-        setJobsTotalPages(data.totalPages || 1);
-        setApplicants(data.applicants || []);
+        setShortlisted(data.shortlisted || []);
+        setTotalShortlisted(data.totalShortlisted || 0);
       } catch (err) {
         console.error(err);
-        setError(err.message || "Failed to load candidate applications.");
+        setError(err.message || "Failed to load shortlisted candidates.");
       } finally {
         setLoading(false);
       }
     };
 
     if (!authLoading && !roleLoading && role === "company") {
-      loadData();
+      loadShortlist();
     }
-  }, [authLoading, roleLoading, role, user, dbUser, jobsPage]);
+  }, [authLoading, roleLoading, role, user, dbUser]);
 
-  const canJobsPrev = jobsPage > 1;
-  const canJobsNext = jobsPage < jobsTotalPages;
+  // --- Distinct job sectors from shortlist (for filter) ---
+  const sectors = useMemo(() => {
+    const s = new Set();
+    for (const rec of shortlisted) {
+      if (rec.jobSector) s.add(rec.jobSector);
+    }
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  }, [shortlisted]);
 
-  // --- Job options (sorted by job title) for filter & cards ---
-  const sortedJobs = useMemo(() => {
-    if (!Array.isArray(jobs)) return [];
-    return [...jobs].sort((a, b) =>
-      (a.title || "").localeCompare(b.title || "")
-    );
-  }, [jobs]);
-
-  const jobFilterOptions = useMemo(() => {
-    const options = sortedJobs.map((job) => ({
-      id: job._id,
-      title: job.title || "(Untitled job)",
-    }));
-    return options;
-  }, [sortedJobs]);
-
-  // whenever search term or selected job changes, reset applicants page
+  // Reset pagination when filters change
   useEffect(() => {
-    setAppsPage(1);
-  }, [searchEmail, selectedJobId]);
+    setPage(1);
+  }, [searchEmail, selectedSector]);
 
-  // --- Applicants search, job filter & sorting by job title + applied time ---
-  const filteredApplicants = useMemo(() => {
-    let base = applicants;
+  // --- Filter & sort shortlisted list ---
+  const filteredShortlisted = useMemo(() => {
+    let base = shortlisted;
 
-    // filter by selected job
-    if (selectedJobId !== "all") {
-      base = base.filter((a) => a.jobId === selectedJobId);
+    // filter by companyEmail is already done on backend
+    // now filter by selected sector
+    if (selectedSector !== "all") {
+      base = base.filter((rec) => rec.jobSector === selectedSector);
     }
 
-    // filter by email search
+    // filter by candidate email
     if (searchEmail.trim()) {
       const term = searchEmail.trim().toLowerCase();
-      base = base.filter((a) =>
-        a.candidateEmail?.toLowerCase().includes(term)
+      base = base.filter((rec) =>
+        rec.candidateEmail?.toLowerCase().includes(term)
       );
     }
 
-    // sort by jobTitle (A–Z), then by applied time (newest first)
-    base = [...base].sort((a, b) => {
-      const tA = (a.jobTitle || "").localeCompare(b.jobTitle || "");
-      if (tA !== 0) return tA;
+    // sort:
+    // 1) jobSector (A–Z)
+    // 2) jobTitle (A–Z)
+    // 3) appliedAt / createdAt (newest first)
+    return [...base].sort((a, b) => {
+      const sA = (a.jobSector || "").localeCompare(a.jobSector || "");
+      const sB = (b.jobSector || "").localeCompare(b.jobSector || "");
+
+      const sectorCompare = (a.jobSector || "").localeCompare(
+        b.jobSector || ""
+      );
+      if (sectorCompare !== 0) return sectorCompare;
+
+      const tCompare = (a.jobTitle || "").localeCompare(b.jobTitle || "");
+      if (tCompare !== 0) return tCompare;
 
       const dA = a.appliedAt
         ? new Date(a.appliedAt).getTime()
@@ -212,115 +197,24 @@ export default function CandidateApplicationsPage() {
         : b.createdAt
         ? new Date(b.createdAt).getTime()
         : 0;
-      return dB - dA; // newest first
+      return dB - dA;
     });
+  }, [shortlisted, searchEmail, selectedSector]);
 
-    return base;
-  }, [applicants, searchEmail, selectedJobId]);
+  const totalPages =
+    filteredShortlisted.length === 0
+      ? 1
+      : Math.max(1, Math.ceil(filteredShortlisted.length / PAGE_SIZE));
 
-  const appsTotalPages = useMemo(() => {
-    if (filteredApplicants.length === 0) return 1;
-    return Math.max(1, Math.ceil(filteredApplicants.length / APPS_PAGE_SIZE));
-  }, [filteredApplicants.length]);
-
-  const currentAppsPage =
-    appsPage > appsTotalPages ? appsTotalPages : appsPage;
-
-  const appsStartIndex = (currentAppsPage - 1) * APPS_PAGE_SIZE;
-  const appsPageItems = filteredApplicants.slice(
-    appsStartIndex,
-    appsStartIndex + APPS_PAGE_SIZE
+  const currentPage = page > totalPages ? totalPages : page;
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const pageItems = filteredShortlisted.slice(
+    startIndex,
+    startIndex + PAGE_SIZE
   );
 
-  const canAppsPrev = currentAppsPage > 1;
-  const canAppsNext = currentAppsPage < appsTotalPages;
-
-  // --------- Shortlist button handler ----------
-  const handleShortlist = async (app) => {
-    if (!user || !dbUser) return;
-    const companyEmail = dbUser.email || user.email;
-
-    setShortlistLoading((prev) => ({ ...prev, [app._id]: true }));
-
-    try {
-      const res = await fetch("/api/company/shortlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyEmail,
-          application: app,
-        }),
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        alert(data?.message || "Failed to shortlist candidate.");
-        return;
-      }
-
-      // mark this applicant as shortlisted in local state
-      setApplicants((prev) =>
-        prev.map((a) =>
-          a._id === app._id ? { ...a, shortlisted: true } : a
-        )
-      );
-    } catch (err) {
-      console.error("Error shortlisting candidate:", err);
-      alert("Error shortlisting candidate. Please try again.");
-    } finally {
-      setShortlistLoading((prev) => ({ ...prev, [app._id]: false }));
-    }
-  };
-
-  // --------- Delete application handler ----------
-  const handleDeleteApplication = async (app) => {
-    if (!user || !dbUser) return;
-    const companyEmail = dbUser.email || user.email;
-
-    const confirm = window.confirm(
-      `Delete this application of ${app.candidateName || "candidate"} for "${app.jobTitle}"?`
-    );
-    if (!confirm) return;
-
-    setDeleteLoading((prev) => ({ ...prev, [app._id]: true }));
-
-    try {
-      const res = await fetch("/api/company/candidate-applications", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyEmail,
-          applicationId: app._id,
-        }),
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        alert(data?.message || "Failed to delete application.");
-        return;
-      }
-
-      // remove from local applicants
-      setApplicants((prev) => prev.filter((a) => a._id !== app._id));
-
-      // update total applications + per-job counters
-      setTotalApplications((prev) => Math.max(0, prev - 1));
-      setApplicationsPerJob((prev) => {
-        const next = { ...prev };
-        if (app.jobId && typeof next[app.jobId] === "number") {
-          next[app.jobId] = Math.max(0, next[app.jobId] - 1);
-        }
-        return next;
-      });
-    } catch (err) {
-      console.error("Error deleting application:", err);
-      alert("Error deleting application. Please try again.");
-    } finally {
-      setDeleteLoading((prev) => ({ ...prev, [app._id]: false }));
-    }
-  };
+  const canPrev = currentPage > 1;
+  const canNext = currentPage < totalPages;
 
   // While auth/role info is loading, hide everything
   if (authLoading || roleLoading || (user && !dbUser)) {
@@ -340,12 +234,14 @@ export default function CandidateApplicationsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
-              Candidate Applications
+              Shortlisted Candidates
             </h1>
             <p className="text-sm text-slate-600 mt-1">
-              First see your company jobs (sorted by job name), then review all
-              candidates who applied to those jobs. You can shortlist or delete
-              applications directly from here.
+              These candidates are collected from{" "}
+              <code className="px-1.5 py-0.5 rounded bg-slate-100 text-[11px]">
+                cv_shortListed_database
+              </code>{" "}
+              for your company. Filter them by job sector and candidate email.
             </p>
           </div>
 
@@ -374,7 +270,7 @@ export default function CandidateApplicationsPage() {
         {status !== "active" && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs sm:text-sm text-amber-800">
             Your company account is currently <strong>{status}</strong>. You can
-            see your jobs and applicants, but some actions may be limited until
+            see shortlisted candidates, but other actions may be limited until
             verification is complete.
           </div>
         )}
@@ -382,25 +278,27 @@ export default function CandidateApplicationsPage() {
         {/* Summary cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-xl bg-white border border-slate-200 p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
-              <Briefcase size={20} className="text-blue-600" />
+            <div className="h-10 w-10 rounded-full bg-emerald-50 flex items-center justify-center">
+              <Users size={20} className="text-emerald-600" />
             </div>
             <div>
-              <p className="text-xs text-slate-500">Total jobs posted</p>
+              <p className="text-xs text-slate-500">Total shortlisted</p>
               <p className="text-xl font-semibold text-slate-900">
-                {totalJobs}
+                {totalShortlisted}
               </p>
             </div>
           </div>
 
           <div className="rounded-xl bg-white border border-slate-200 p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-emerald-50 flex items-center justify-center">
-              <Users size={20} className="text-emerald-600" />
+            <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
+              <Briefcase size={20} className="text-blue-600" />
             </div>
             <div>
-              <p className="text-xs text-slate-500">Total applications</p>
+              <p className="text-xs text-slate-500">
+                Job sectors with shortlist
+              </p>
               <p className="text-xl font-semibold text-slate-900">
-                {totalApplications}
+                {sectors.length}
               </p>
             </div>
           </div>
@@ -410,12 +308,12 @@ export default function CandidateApplicationsPage() {
               <Clock size={20} className="text-indigo-600" />
             </div>
             <div>
-              <p className="text-xs text-slate-500">Applicants per page</p>
+              <p className="text-xs text-slate-500">Candidates per page</p>
               <p className="text-xl font-semibold text-slate-900">
-                {APPS_PAGE_SIZE}
+                {PAGE_SIZE}
               </p>
               <p className="text-[11px] text-slate-400">
-                Page {currentAppsPage} of {appsTotalPages}
+                Page {currentPage} of {totalPages}
               </p>
             </div>
           </div>
@@ -428,166 +326,43 @@ export default function CandidateApplicationsPage() {
           </p>
         )}
 
-        {/* Loading overall */}
+        {/* Loading */}
         {loading && (
           <div className="flex justify-center py-12">
             <LoadingSpinner
               size="lg"
-              label="Loading your jobs & applicants..."
+              label="Loading shortlisted candidates..."
             />
           </div>
         )}
 
-        {/* Jobs grid (top section) */}
-        {!loading && (
-          <section className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-900">
-              Your posted jobs (sorted by job name)
-            </h2>
-
-            {sortedJobs.length === 0 ? (
-              <div className="text-center py-8 text-sm text-slate-500 bg-white rounded-xl border border-slate-200">
-                You haven&apos;t posted any jobs yet. Once you post jobs, they
-                will appear here with application counts.
-              </div>
-            ) : (
-              <>
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                  {sortedJobs.map((job, index) => {
-                    const appsCount =
-                      applicationsPerJob[job._id] !== undefined
-                        ? applicationsPerJob[job._id]
-                        : 0;
-
-                    return (
-                      <motion.div
-                        key={job._id}
-                        initial={{ opacity: 0, y: 4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.2, delay: index * 0.02 }}
-                        className="rounded-xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition flex flex-col p-4"
-                      >
-                        <div className="mb-2">
-                          <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                            {job.sector || "General"}
-                          </p>
-                          <h3 className="text-base font-semibold text-slate-900 line-clamp-2">
-                            {job.title}
-                          </h3>
-                          <p className="text-xs text-slate-600 mt-0.5">
-                            {job.company}
-                          </p>
-                        </div>
-
-                        <div className="mt-2 space-y-1.5 text-xs text-slate-600">
-                          {job.location && (
-                            <div className="flex items-center gap-1.5">
-                              <MapPin size={12} />
-                              <span>{job.location}</span>
-                            </div>
-                          )}
-                          {job.type && (
-                            <div className="flex items-center gap-1.5">
-                              <Briefcase size={12} />
-                              <span>{job.type}</span>
-                            </div>
-                          )}
-                          {job.postedDate && (
-                            <div className="flex items-center gap-1.5">
-                              <CalendarDays size={12} />
-                              <span>
-                                Posted:{" "}
-                                {new Date(job.postedDate).toLocaleDateString()}
-                              </span>
-                            </div>
-                          )}
-                          {job.deadline && (
-                            <div className="flex items-center gap-1.5">
-                              <CalendarDays size={12} />
-                              <span>
-                                Deadline:{" "}
-                                {new Date(job.deadline).toLocaleDateString()}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
-                          <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
-                            <Users size={12} />
-                            {appsCount}{" "}
-                            {appsCount === 1 ? "Applicant" : "Applicants"}
-                          </span>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </div>
-
-                {jobsTotalPages > 1 && (
-                  <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-                    <div className="text-xs text-slate-500">
-                      Jobs page {jobsPage} of {jobsTotalPages} • {totalJobs} job
-                      {totalJobs !== 1 && "s"}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => canJobsPrev && setJobsPage((p) => p - 1)}
-                        disabled={!canJobsPrev}
-                        className={`px-3 py-1.5 rounded-full text-sm border ${
-                          canJobsPrev
-                            ? "bg-white hover:bg-slate-50"
-                            : "bg-slate-100 text-slate-400 cursor-not-allowed"
-                        }`}
-                      >
-                        ← Previous
-                      </button>
-                      <button
-                        onClick={() => canJobsNext && setJobsPage((p) => p + 1)}
-                        disabled={!canJobsNext}
-                        className={`px-3 py-1.5 rounded-full text-sm border ${
-                          canJobsNext
-                            ? "bg-white hover:bg-slate-50"
-                            : "bg-slate-100 text-slate-400 cursor-not-allowed"
-                        }`}
-                      >
-                        Next →
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </section>
-        )}
-
-        {/* Applicants list (bottom section) */}
+        {/* Shortlisted list */}
         {!loading && (
           <section className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Applicants list (sorted by job name)
+                  Shortlisted candidates (job sector wise)
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-600">
-                  First choose a job or see all, then filter by email. You can
-                  open the CV, shortlist the candidate, or delete the
-                  application.
+                  Filter by job sector or candidate email. Data is first
+                  filtered by your company email, then sorted by{" "}
+                  <strong>jobSector</strong>.
                 </p>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                {/* Job filter dropdown */}
+                {/* Sector filter */}
                 <div className="w-full sm:w-52">
                   <select
-                    value={selectedJobId}
-                    onChange={(e) => setSelectedJobId(e.target.value)}
+                    value={selectedSector}
+                    onChange={(e) => setSelectedSector(e.target.value)}
                     className="w-full border border-slate-200 bg-white rounded-full px-3 py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="all">All jobs</option>
-                    {jobFilterOptions.map((job) => (
-                      <option key={job.id} value={job.id}>
-                        {job.title}
+                    <option value="all">All sectors</option>
+                    {sectors.map((sector) => (
+                      <option key={sector} value={sector}>
+                        {sector}
                       </option>
                     ))}
                   </select>
@@ -612,9 +387,9 @@ export default function CandidateApplicationsPage() {
               </div>
             </div>
 
-            {filteredApplicants.length === 0 ? (
+            {filteredShortlisted.length === 0 ? (
               <div className="text-center py-8 text-sm text-slate-500 bg-white rounded-xl border border-slate-200">
-                No applicants found for this selection yet.
+                No shortlisted candidates found for this selection yet.
               </div>
             ) : (
               <>
@@ -626,25 +401,24 @@ export default function CandidateApplicationsPage() {
                           Candidate
                         </th>
                         <th className="px-4 py-3 text-left font-semibold">
-                          Job
+                          Job (Sector wise)
                         </th>
                         <th className="px-4 py-3 text-left font-semibold">
-                          Applied On
+                          Timeline
                         </th>
                         <th className="px-4 py-3 text-left font-semibold">
-                          Status
-                        </th>
-                        <th className="px-4 py-3 text-left font-semibold">
-                          Actions
+                          Status / CV
                         </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {appsPageItems.map((app, index) => {
-                        const appliedDate = app.appliedAt || app.createdAt;
+                      {pageItems.map((rec, index) => {
+                        const appliedDate = rec.appliedAt || rec.applicationCreatedAt;
+                        const shortlistedDate = rec.createdAt;
+
                         return (
                           <motion.tr
-                            key={app._id}
+                            key={rec._id}
                             initial={{ opacity: 0, y: 4 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{
@@ -666,159 +440,124 @@ export default function CandidateApplicationsPage() {
                                     className="text-slate-500"
                                   />
                                   <span className="font-medium text-slate-900">
-                                    {app.candidateName || "Unnamed candidate"}
+                                    {rec.candidateName || "Unnamed candidate"}
                                   </span>
                                 </div>
                                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600">
-                                  {app.candidateEmail && (
+                                  {rec.candidateEmail && (
                                     <span className="flex items-center gap-1">
                                       <Mail size={11} />
-                                      {app.candidateEmail}
+                                      {rec.candidateEmail}
                                     </span>
                                   )}
-                                  {app.candidatePhone && (
+                                  {rec.candidatePhone && (
                                     <span className="flex items-center gap-1">
                                       <Phone size={11} />
-                                      {app.candidatePhone}
+                                      {rec.candidatePhone}
                                     </span>
                                   )}
-                                  {app.candidateAddress && (
+                                  {rec.candidateAddress && (
                                     <span className="flex items-center gap-1">
                                       <MapPin size={11} />
-                                      {app.candidateAddress}
+                                      {rec.candidateAddress}
                                     </span>
                                   )}
                                 </div>
                               </div>
                             </td>
 
-                            {/* Job */}
+                            {/* Job (with sector) */}
                             <td className="px-4 py-3 align-top">
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-1.5 text-slate-800">
                                   <Briefcase size={13} />
                                   <span className="font-medium">
-                                    {app.jobTitle}
+                                    {rec.jobTitle || "Untitled job"}
                                   </span>
                                 </div>
                                 <div className="text-[11px] text-slate-500">
-                                  <span>{app.company}</span>
-                                  {app.location && (
+                                  <span>{rec.jobCompany}</span>
+                                  {rec.jobSector && (
                                     <>
                                       {" "}
-                                      • <span>{app.location}</span>
+                                      •{" "}
+                                      <span className="font-medium">
+                                        {rec.jobSector}
+                                      </span>
                                     </>
                                   )}
-                                  {app.type && (
+                                  {rec.jobLocation && (
                                     <>
                                       {" "}
-                                      • <span>{app.type}</span>
+                                      • <span>{rec.jobLocation}</span>
+                                    </>
+                                  )}
+                                  {rec.jobType && (
+                                    <>
+                                      {" "}
+                                      • <span>{rec.jobType}</span>
                                     </>
                                   )}
                                 </div>
                               </div>
                             </td>
 
-                            {/* Applied on + CV */}
+                            {/* Timeline */}
                             <td className="px-4 py-3 align-top">
                               <div className="flex flex-col text-[11px] text-slate-600 gap-1">
-                                <div className="flex items-center gap-1.5">
-                                  <CalendarDays size={12} />
-                                  <span>
-                                    {appliedDate
-                                      ? new Date(
-                                          appliedDate
-                                        ).toLocaleDateString()
-                                      : "N/A"}
-                                  </span>
-                                </div>
                                 {appliedDate && (
+                                  <div className="flex items-center gap-1.5">
+                                    <CalendarDays size={12} />
+                                    <span>
+                                      Applied:{" "}
+                                      {new Date(
+                                        appliedDate
+                                      ).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                )}
+                                {shortlistedDate && (
                                   <div className="flex items-center gap-1.5 text-slate-500">
                                     <Clock size={12} />
                                     <span>
+                                      Shortlisted:{" "}
                                       {new Date(
-                                        appliedDate
+                                        shortlistedDate
+                                      ).toLocaleDateString()}{" "}
+                                      •{" "}
+                                      {new Date(
+                                        shortlistedDate
                                       ).toLocaleTimeString()}
                                     </span>
                                   </div>
                                 )}
+                              </div>
+                            </td>
 
-                                {app.resumeUrl && (
+                            {/* Status + CV */}
+                            <td className="px-4 py-3 align-top">
+                              <div className="flex flex-col gap-2">
+                                <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                  <BadgeCheck size={12} />
+                                  Shortlisted
+                                </span>
+
+                                {rec.resumeUrl && (
                                   <button
                                     type="button"
                                     onClick={() =>
                                       window.open(
-                                        app.resumeUrl,
+                                        rec.resumeUrl,
                                         "_blank",
                                         "noopener,noreferrer"
                                       )
                                     }
-                                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 mt-1"
+                                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
                                   >
                                     <FileText size={12} />
                                     View CV
                                   </button>
                                 )}
-                              </div>
-                            </td>
-
-                            {/* Status */}
-                            <td className="px-4 py-3 align-top">
-                              <span
-                                className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ${
-                                  app.status === "submitted"
-                                    ? "bg-slate-100 text-slate-700 border border-slate-200"
-                                    : "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                                }`}
-                              >
-                                <BadgeCheck size={12} />
-                                {app.status || "submitted"}
-                              </span>
-                            </td>
-
-                            {/* Actions: Shortlist + Delete */}
-                            <td className="px-4 py-3 align-top">
-                              <div className="flex flex-col gap-2">
-                                {/* Shortlist button */}
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    !app.shortlisted && handleShortlist(app)
-                                  }
-                                  disabled={app.shortlisted || shortlistLoading[app._id]}
-                                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold border ${
-                                    app.shortlisted
-                                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 cursor-default"
-                                      : "bg-white text-slate-800 border-slate-200 hover:bg-slate-50"
-                                  } disabled:opacity-60`}
-                                >
-                                  <Star
-                                    size={12}
-                                    className={
-                                      app.shortlisted
-                                        ? "text-emerald-600"
-                                        : "text-slate-500"
-                                    }
-                                  />
-                                  {app.shortlisted
-                                    ? "Shortlisted"
-                                    : shortlistLoading[app._id]
-                                    ? "Shortlisting..."
-                                    : "Shortlist"}
-                                </button>
-
-                                {/* Delete button */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteApplication(app)}
-                                  disabled={deleteLoading[app._id]}
-                                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold border border-red-200 text-red-700 bg-red-50 hover:bg-red-100 disabled:opacity-60"
-                                >
-                                  <Trash2 size={12} />
-                                  {deleteLoading[app._id]
-                                    ? "Deleting..."
-                                    : "Delete"}
-                                </button>
                               </div>
                             </td>
                           </motion.tr>
@@ -828,26 +567,28 @@ export default function CandidateApplicationsPage() {
                   </table>
                 </div>
 
-                {/* Applicants pagination */}
-                {appsTotalPages > 1 && (
+                {/* Pagination */}
+                {totalPages > 1 && (
                   <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
                     <div className="text-xs text-slate-500">
-                      Applicants page {currentAppsPage} of {appsTotalPages} •{" "}
-                      {filteredApplicants.length} result
-                      {filteredApplicants.length !== 1 && "s"}
+                      Page {currentPage} of {totalPages} •{" "}
+                      {filteredShortlisted.length} result
+                      {filteredShortlisted.length !== 1 && "s"}
                       {searchEmail
                         ? ` (filtered by "${searchEmail}")`
+                        : ""}
+                      {selectedSector !== "all"
+                        ? ` • Sector: ${selectedSector}`
                         : ""}
                     </div>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() =>
-                          canAppsPrev &&
-                          setAppsPage((p) => Math.max(1, p - 1))
+                          canPrev && setPage((p) => Math.max(1, p - 1))
                         }
-                        disabled={!canAppsPrev}
+                        disabled={!canPrev}
                         className={`px-3 py-1.5 rounded-full text-sm border ${
-                          canAppsPrev
+                          canPrev
                             ? "bg-white hover:bg-slate-50"
                             : "bg-slate-100 text-slate-400 cursor-not-allowed"
                         }`}
@@ -856,14 +597,12 @@ export default function CandidateApplicationsPage() {
                       </button>
                       <button
                         onClick={() =>
-                          canAppsNext &&
-                          setAppsPage((p) =>
-                            Math.min(appsTotalPages, p + 1)
-                          )
+                          canNext &&
+                          setPage((p) => Math.min(totalPages, p + 1))
                         }
-                        disabled={!canAppsNext}
+                        disabled={!canNext}
                         className={`px-3 py-1.5 rounded-full text-sm border ${
-                          canAppsNext
+                          canNext
                             ? "bg-white hover:bg-slate-50"
                             : "bg-slate-100 text-slate-400 cursor-not-allowed"
                         }`}

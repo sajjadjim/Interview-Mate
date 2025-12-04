@@ -1,3 +1,4 @@
+// src/app/applications/page.jsx
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -66,27 +67,35 @@ export default function ApplicationsPage() {
       setError("");
 
       try {
+        // Build query for job applications using BOTH uid & email
+        const jobParams = new URLSearchParams();
+        if (user.uid) jobParams.set("candidateUid", user.uid);
+        if (user.email) jobParams.set("candidateEmail", user.email);
+
         // Fetch interview slot applications + job applications in parallel
         const [slotRes, jobRes] = await Promise.all([
+          // interview slot applications by email
           fetch(`/api/applications?email=${encodeURIComponent(user.email)}`),
-          fetch(
-            `/api/users-jobs-application?candidateUid=${encodeURIComponent(
-              user.uid
-            )}`
-          ),
+          // job applications by candidateUid/candidateEmail
+          fetch(`/api/users-jobs-application?${jobParams.toString()}`),
         ]);
 
         let slotData = [];
-        let jobData = [];
+        let jobDataRaw = [];
 
+        // ---- slot applications ----
         if (slotRes.ok) {
-          slotData = await slotRes.json();
+          const json = await slotRes.json();
+          slotData = Array.isArray(json) ? json : [];
         } else {
           console.error("Failed to load interview applications.");
         }
 
+        // ---- job applications ----
         if (jobRes.ok) {
-          jobData = await jobRes.json();
+          const json = await jobRes.json();
+          // our API returns an array
+          jobDataRaw = Array.isArray(json) ? json : [];
         } else {
           console.error("Failed to load job applications.");
         }
@@ -97,14 +106,14 @@ export default function ApplicationsPage() {
         }
 
         // Normalize arrays
-        setSlotApplications(Array.isArray(slotData) ? slotData : []);
+        setSlotApplications(slotData);
 
-        // Sort job applications by newest first
-        const sortedJobs = Array.isArray(jobData)
-          ? [...jobData].sort((a, b) => {
-              const da = new Date(a.createdAt || 0).getTime();
-              const db = new Date(b.createdAt || 0).getTime();
-              return db - da;
+        // Sort job applications by newest apply time (appliedAt → createdAt)
+        const sortedJobs = Array.isArray(jobDataRaw)
+          ? [...jobDataRaw].sort((a, b) => {
+              const da = new Date(a.appliedAt || a.createdAt || 0).getTime();
+              const db = new Date(b.appliedAt || b.createdAt || 0).getTime();
+              return db - da; // newest first
             })
           : [];
 
@@ -290,11 +299,15 @@ export default function ApplicationsPage() {
                   </h2>
                   <p className="text-xs text-slate-500">
                     These are the jobs you have applied for using the Apply
-                    button on job details.
+                    button on job details. You have applied to{" "}
+                    <span className="font-semibold text-slate-700">
+                      {jobApplications.length}
+                    </span>{" "}
+                    job{jobApplications.length !== 1 && "s"} so far.
                   </p>
                 </div>
                 {jobApplications.length > 0 && (
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs text-slate-500 text-right">
                     Showing{" "}
                     <span className="font-semibold">
                       {paginatedJobApplications.length}
@@ -304,6 +317,10 @@ export default function ApplicationsPage() {
                       {jobApplications.length}
                     </span>{" "}
                     applications
+                    <br />
+                    <span className="text-[11px] text-slate-400">
+                      Page {jobPage} of {totalJobPages}
+                    </span>
                   </div>
                 )}
               </div>
@@ -322,7 +339,7 @@ export default function ApplicationsPage() {
                             Job
                           </th>
                           <th className="px-4 py-3 text-left font-semibold">
-                            Details
+                            Job Details
                           </th>
                           <th className="px-4 py-3 text-left font-semibold">
                             Status
@@ -333,124 +350,189 @@ export default function ApplicationsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {paginatedJobApplications.map((app, index) => (
-                          <motion.tr
-                            key={app._id}
-                            initial={{ opacity: 0, y: 4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{
-                              duration: 0.2,
-                              delay: index * 0.02,
-                            }}
-                            className={
-                              index % 2 === 0 ? "bg-white" : "bg-slate-50/50"
-                            }
-                          >
-                            {/* Job title & company */}
-                            <td className="px-4 py-3 align-top">
-                              <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-2 text-slate-900">
-                                  <Briefcase size={14} className="text-slate-500" />
-                                  <span className="font-semibold">
-                                    {app.jobTitle}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-slate-600">
-                                  {app.company}
-                                </p>
-                              </div>
-                            </td>
-
-                            {/* Sector, location, salary */}
-                            <td className="px-4 py-3 align-top text-xs text-slate-700">
-                              <div className="flex flex-col gap-1">
-                                <div className="flex flex-wrap gap-1.5">
-                                  {app.sector && (
-                                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px]">
-                                      <Tag size={11} className="mr-1" />
-                                      {app.sector}
-                                    </span>
-                                  )}
-                                  {app.type && (
-                                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px]">
-                                      {app.type}
-                                    </span>
-                                  )}
-                                  {app.location && (
-                                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px]">
-                                      <MapPin size={11} className="mr-1" />
-                                      {app.location}
-                                    </span>
-                                  )}
-                                </div>
-                                {app.salary && (
-                                  <div className="flex items-center gap-1 text-[11px] text-slate-600 mt-1">
-                                    <BadgeDollarSign size={11} />
-                                    <span>
-                                      {app.salary.min} - {app.salary.max}{" "}
-                                      {app.salary.currency}
+                        {paginatedJobApplications.map((app, index) => {
+                          const appliedAt = app.appliedAt || app.createdAt;
+                          const deadline = app.jobDeadline;
+                          return (
+                            <motion.tr
+                              key={app._id}
+                              initial={{ opacity: 0, y: 4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{
+                                duration: 0.2,
+                                delay: index * 0.02,
+                              }}
+                              className={
+                                index % 2 === 0 ? "bg-white" : "bg-slate-50/50"
+                              }
+                            >
+                              {/* Job title & company */}
+                              <td className="px-4 py-3 align-top">
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-2 text-slate-900">
+                                    <Briefcase
+                                      size={14}
+                                      className="text-slate-500"
+                                    />
+                                    <span className="font-semibold">
+                                      {app.jobTitle}
                                     </span>
                                   </div>
+                                  <p className="text-xs text-slate-600">
+                                    {app.company}
+                                  </p>
+                                </div>
+                              </td>
+
+                              {/* Sector, location, salary, vacancy, job time, address, deadline */}
+                              <td className="px-4 py-3 align-top text-xs text-slate-700">
+                                <div className="flex flex-col gap-1.5">
+                                  {/* chips */}
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {app.sector && (
+                                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px]">
+                                        <Tag size={11} className="mr-1" />
+                                        {app.sector}
+                                      </span>
+                                    )}
+                                    {app.type && (
+                                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px]">
+                                        {app.type}
+                                      </span>
+                                    )}
+                                    {app.location && (
+                                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px]">
+                                        <MapPin size={11} className="mr-1" />
+                                        {app.location}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* salary */}
+                                  {app.salary && (
+                                    <div className="flex items-center gap-1 text-[11px] text-slate-600">
+                                      <BadgeDollarSign size={11} />
+                                      <span>
+                                        {app.salary.min} - {app.salary.max}{" "}
+                                        {app.salary.currency}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* vacancy */}
+                                  {typeof app.jobVacancy === "number" && (
+                                    <div className="text-[11px] text-slate-600">
+                                      👥 Vacancy: {app.jobVacancy}
+                                    </div>
+                                  )}
+
+                                  {/* job time */}
+                                  {app.jobTime && (
+                                    <div className="flex items-center gap-1 text-[11px] text-slate-600">
+                                      <Clock size={11} />
+                                      <span>{app.jobTime}</span>
+                                    </div>
+                                  )}
+
+                                  {/* job address */}
+                                  {app.jobAddress && (
+                                    <div className="flex items-center gap-1 text-[11px] text-slate-600">
+                                      <MapPin size={11} />
+                                      <span>{app.jobAddress}</span>
+                                    </div>
+                                  )}
+
+                                  {/* deadline */}
+                                  {deadline && (
+                                    <div className="flex items-center gap-1 text-[11px] text-slate-600">
+                                      <CalendarDays size={11} />
+                                      <span>
+                                        Deadline:{" "}
+                                        {new Date(
+                                          deadline
+                                        ).toLocaleDateString()}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Status */}
+                              <td className="px-4 py-3 align-top text-xs">
+                                {(() => {
+                                  const status = app.status || "submitted";
+                                  const lower = status.toLowerCase();
+
+                                  let classes =
+                                    "bg-slate-100 text-slate-700 border border-slate-200";
+                                  let icon = <ShieldAlert size={12} />;
+
+                                  if (lower === "submitted") {
+                                    classes =
+                                      "bg-blue-50 text-blue-700 border border-blue-100";
+                                    icon = <ShieldAlert size={12} />;
+                                  } else if (
+                                    lower === "shortlisted" ||
+                                    lower === "under review"
+                                  ) {
+                                    classes =
+                                      "bg-amber-50 text-amber-700 border border-amber-100";
+                                    icon = <ShieldAlert size={12} />;
+                                  } else if (
+                                    lower === "accepted" ||
+                                    lower === "hired"
+                                  ) {
+                                    classes =
+                                      "bg-emerald-50 text-emerald-700 border border-emerald-100";
+                                    icon = <CheckCircle2 size={12} />;
+                                  } else if (
+                                    lower === "rejected" ||
+                                    lower === "declined"
+                                  ) {
+                                    classes =
+                                      "bg-red-50 text-red-700 border border-red-100";
+                                    icon = <ShieldAlert size={12} />;
+                                  }
+
+                                  return (
+                                    <span
+                                      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${classes}`}
+                                    >
+                                      {icon}
+                                      {status}
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+
+                              {/* Applied At (date + time) */}
+                              <td className="px-4 py-3 align-top text-xs text-slate-500">
+                                {appliedAt ? (
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <CalendarDays size={11} />
+                                      <span>
+                                        {new Date(
+                                          appliedAt
+                                        ).toLocaleDateString()}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <Clock size={11} />
+                                      <span>
+                                        {new Date(
+                                          appliedAt
+                                        ).toLocaleTimeString()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  "-"
                                 )}
-                              </div>
-                            </td>
-
-                            {/* Status */}
-                            <td className="px-4 py-3 align-top text-xs">
-                              {(() => {
-                                const status = app.status || "submitted";
-                                const lower = status.toLowerCase();
-
-                                let classes =
-                                  "bg-slate-100 text-slate-700 border border-slate-200";
-                                let icon = <ShieldAlert size={12} />;
-
-                                if (lower === "submitted") {
-                                  classes =
-                                    "bg-blue-50 text-blue-700 border border-blue-100";
-                                  icon = <ShieldAlert size={12} />;
-                                } else if (
-                                  lower === "shortlisted" ||
-                                  lower === "under review"
-                                ) {
-                                  classes =
-                                    "bg-amber-50 text-amber-700 border border-amber-100";
-                                  icon = <ShieldAlert size={12} />;
-                                } else if (
-                                  lower === "accepted" ||
-                                  lower === "hired"
-                                ) {
-                                  classes =
-                                    "bg-emerald-50 text-emerald-700 border border-emerald-100";
-                                  icon = <CheckCircle2 size={12} />;
-                                } else if (
-                                  lower === "rejected" ||
-                                  lower === "declined"
-                                ) {
-                                  classes =
-                                    "bg-red-50 text-red-700 border border-red-100";
-                                  icon = <ShieldAlert size={12} />;
-                                }
-
-                                return (
-                                  <span
-                                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${classes}`}
-                                  >
-                                    {icon}
-                                    {status}
-                                  </span>
-                                );
-                              })()}
-                            </td>
-
-                            {/* Applied At */}
-                            <td className="px-4 py-3 align-top text-xs text-slate-500">
-                              {app.createdAt
-                                ? new Date(app.createdAt).toLocaleString()
-                                : "-"}
-                            </td>
-                          </motion.tr>
-                        ))}
+                              </td>
+                            </motion.tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -463,7 +545,13 @@ export default function ApplicationsPage() {
                         <span className="font-semibold">{jobPage}</span> of{" "}
                         <span className="font-semibold">
                           {totalJobPages}
-                        </span>
+                        </span>{" "}
+                        •{" "}
+                        <span className="font-semibold">
+                          {jobApplications.length}
+                        </span>{" "}
+                        total application
+                        {jobApplications.length !== 1 && "s"}
                       </div>
                       <div className="flex items-center gap-2">
                         <button
