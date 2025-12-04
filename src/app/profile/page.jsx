@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Pencil, X, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
-import { Pencil, X } from "lucide-react";
+import { CheckCircle2, XCircle } from "lucide-react";
 
 // Simple reusable modal component
 function Modal({ title, children, onClose }) {
@@ -49,6 +50,8 @@ export default function ProfilePage() {
     currentJobPosition: "",
     age: "",
     imageUrl: "",
+    resumeUrl: "",
+    portfolioUrl: "",
   });
 
   // HR fields
@@ -73,8 +76,6 @@ export default function ProfilePage() {
     ownerPhone: "",
   });
 
-
-
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
@@ -82,14 +83,14 @@ export default function ProfilePage() {
     }
   }, [authLoading, user, router]);
 
-  // Dynamic Gmail name title
+  // Dynamic page title
   useEffect(() => {
     document.title = user?.email
       ? `Profile | ${user.email} | Interview-Mate`
       : "Profile | Interview-Mate";
   }, [user]);
 
-  // Load profile from DB
+  // Load profile from DB (secured with Firebase ID token)
   useEffect(() => {
     const fetchProfile = async () => {
       if (!user) return;
@@ -98,22 +99,22 @@ export default function ProfilePage() {
       setSuccess("");
 
       try {
-        const idToken = await user.getIdToken(); // from Firebase client SDK
+        const idToken = await user.getIdToken(); // 👈 secure token from Firebase
 
-const res = await fetch("/api/users/me", {
-  method: "GET", // or PATCH
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${idToken}`,   // 👈 important
-  },
-  // body: JSON.stringify(...profile data...)   // for PATCH only
-});
+        const res = await fetch("/api/users/me", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`, // 👈 backend verifies this
+          },
+        });
 
         if (!res.ok) {
           setError("Failed to load profile.");
           setLoadingProfile(false);
           return;
         }
+
         const data = await res.json();
         setDbUser(data);
 
@@ -152,7 +153,23 @@ const res = await fetch("/api/users/me", {
   const role = dbUser?.role;
   const status = dbUser?.status || "unknown";
 
+  // Helper to send authorized PATCH to /api/users/me
+  const authorizedPatch = async (payload) => {
+    const idToken = await user.getIdToken(); // 👈 get fresh token
+    const res = await fetch("/api/users/me", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`, // 👈 secure API call
+      },
+      body: JSON.stringify(payload),
+    });
+    return res;
+  };
+
   // ---------- SAVE HANDLERS ----------
+
+  // Candidate can always edit
   const saveCandidate = async (e) => {
     e.preventDefault();
     setError("");
@@ -165,16 +182,12 @@ const res = await fetch("/api/users/me", {
 
     setSaving(true);
     try {
-      const res = await fetch("/api/users/me", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          uid: user.uid,
-          candidateProfile: {
-            ...candidateData,
-            age: Number(candidateData.age),
-          },
-        }),
+      const res = await authorizedPatch({
+        uid: user.uid, // backend may ignore this and use decoded token uid
+        candidateProfile: {
+          ...candidateData,
+          age: Number(candidateData.age),
+        },
       });
 
       if (!res.ok) throw new Error("Failed to save candidate profile.");
@@ -188,10 +201,18 @@ const res = await fetch("/api/users/me", {
     }
   };
 
+  // HR can edit ONLY when status is not "active"
   const saveHr = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
+
+    if (status === "active") {
+      setError(
+        "Your HR profile is already verified and locked. Contact support to change information."
+      );
+      return;
+    }
 
     const required = [
       hrData.fullName,
@@ -210,22 +231,18 @@ const res = await fetch("/api/users/me", {
 
     setSaving(true);
     try {
-      const res = await fetch("/api/users/me", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          uid: user.uid,
-          hrProfile: {
-            ...hrData,
-            age: Number(hrData.age),
-            companyTenureDays: Number(hrData.companyTenureDays),
-          },
-        }),
+      const res = await authorizedPatch({
+        uid: user.uid,
+        hrProfile: {
+          ...hrData,
+          age: Number(hrData.age),
+          companyTenureDays: Number(hrData.companyTenureDays),
+        },
       });
 
       if (!res.ok) throw new Error("Failed to save HR profile.");
       setSuccess(
-        "HR information submitted. Your status will stay inactive until verified by the team."
+        "HR information submitted. Once the team marks you as active, your data will be locked."
       );
       setActiveModal(null);
     } catch (err) {
@@ -236,10 +253,18 @@ const res = await fetch("/api/users/me", {
     }
   };
 
+  // Company can edit ONLY when status is not "active"
   const saveCompany = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
+
+    if (status === "active") {
+      setError(
+        "Your company profile is already verified and locked. Contact support to change information."
+      );
+      return;
+    }
 
     const required = [
       companyData.companyName,
@@ -256,20 +281,16 @@ const res = await fetch("/api/users/me", {
 
     setSaving(true);
     try {
-      const res = await fetch("/api/users/me", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          uid: user.uid,
-          companyProfile: {
-            ...companyData,
-          },
-        }),
+      const res = await authorizedPatch({
+        uid: user.uid,
+        companyProfile: {
+          ...companyData,
+        },
       });
 
       if (!res.ok) throw new Error("Failed to save company profile.");
       setSuccess(
-        "Company information submitted. Your status will stay inactive until verified by the team."
+        "Company information submitted. Once the team marks you as active, your data will be locked."
       );
       setActiveModal(null);
     } catch (err) {
@@ -292,8 +313,12 @@ const res = await fetch("/api/users/me", {
 
   const fullCandidateName =
     candidateData.firstName || candidateData.lastName
-      ? `${candidateData.firstName || ""} ${candidateData.lastName || ""}`.trim()
+      ? `${candidateData.firstName || ""} ${candidateData.lastName || ""
+        }`.trim()
       : dbUser.name || dbUser.email;
+
+  const hrCanEdit = role === "hr" && status !== "active";
+  const companyCanEdit = role === "company" && status !== "active";
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
@@ -331,7 +356,7 @@ const res = await fetch("/api/users/me", {
         </p>
       )}
 
-      {/* CANDIDATE VIEW CARD */}
+      {/* CANDIDATE VIEW CARD (always editable) */}
       {role === "candidate" && (
         <section className="bg-white border rounded-2xl p-4 shadow-sm space-y-3">
           <div className="flex items-center justify-between gap-2">
@@ -362,6 +387,37 @@ const res = await fetch("/api/users/me", {
               <p className="font-medium text-gray-900">
                 {candidateData.age || "Not provided"}
               </p>
+
+              <div className="space-y-1">
+                <p className="text-gray-500 text-xs">CV / Resume URL</p>
+
+                {candidateData.resumeUrl ? (
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    <a
+                      href={candidateData.resumeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-gray-900 underline text-xs sm:text-sm"
+                    >
+                    </a>
+                    {/* {candidateData.resumeUrl} */}
+                    <span className="text-[11px] font-semibold text-emerald-600">
+                      Submitted
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <XCircle className="h-4 w-4 text-red-500" />
+                    <span className="font-medium text-gray-900 text-xs sm:text-sm">
+                      Apply to jobs must need submit
+                    </span>
+                    <span className="text-[11px] font-semibold text-red-600">
+                      Not submitted
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="sm:col-span-2">
               <p className="text-gray-500 text-xs">Address</p>
@@ -376,6 +432,13 @@ const res = await fetch("/api/users/me", {
               </p>
             </div>
             <div>
+              <p className="text-gray-500 text-xs">
+                Website / Portfolio URL
+              </p>
+              <p className="font-medium text-gray-900">
+                {candidateData.portfolioUrl || "Not provided"}
+              </p>
+              <br />
               <p className="text-gray-500 text-xs">
                 Educational Qualification
               </p>
@@ -417,10 +480,20 @@ const res = await fetch("/api/users/me", {
                   {status}
                 </span>
               </p>
+              {status === "active" && (
+                <p className="mt-1 text-[11px] text-gray-500">
+                  Your profile is verified and locked. Contact support if any
+                  information is incorrect.
+                </p>
+              )}
             </div>
             <button
-              onClick={() => setActiveModal("hr")}
-              className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
+              onClick={() => hrCanEdit && setActiveModal("hr")}
+              disabled={!hrCanEdit}
+              className={`inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border ${hrCanEdit
+                  ? "border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
+                  : "border-gray-200 text-gray-400 bg-gray-100 cursor-not-allowed"
+                }`}
             >
               <Pencil size={14} />
               Edit
@@ -498,10 +571,20 @@ const res = await fetch("/api/users/me", {
                   {status}
                 </span>
               </p>
+              {status === "active" && (
+                <p className="mt-1 text-[11px] text-gray-500">
+                  Your company profile is verified and locked. Contact support
+                  if any information needs to be changed.
+                </p>
+              )}
             </div>
             <button
-              onClick={() => setActiveModal("company")}
-              className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
+              onClick={() => companyCanEdit && setActiveModal("company")}
+              disabled={!companyCanEdit}
+              className={`inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border ${companyCanEdit
+                  ? "border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
+                  : "border-gray-200 text-gray-400 bg-gray-100 cursor-not-allowed"
+                }`}
             >
               <Pencil size={14} />
               Edit
@@ -551,6 +634,7 @@ const res = await fetch("/api/users/me", {
 
       {/* ---------- MODALS ---------- */}
 
+      {/* Candidate edit modal (always allowed) */}
       {activeModal === "candidate" && (
         <Modal
           title="Update Candidate Information"
@@ -634,7 +718,36 @@ const res = await fetch("/api/users/me", {
                 />
               </div>
             </div>
-
+            <div>
+              <label className="text-sm font-medium">
+                Resume / CV URL <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={candidateData.resumeUrl}
+                onChange={(e) =>
+                  setCandidateData((p) => ({
+                    ...p,
+                    resumeUrl: e.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">
+                Portfolio / website URL (Optional)
+              </label>
+              <input
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={candidateData.portfolioUrl}
+                onChange={(e) =>
+                  setCandidateData((p) => ({
+                    ...p,
+                    portfolioUrl: e.target.value,
+                  }))
+                }
+              />
+            </div>
             <div>
               <label className="text-sm font-medium">
                 Educational Qualification
@@ -683,6 +796,7 @@ const res = await fetch("/api/users/me", {
               />
             </div>
 
+
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
@@ -703,14 +817,25 @@ const res = await fetch("/api/users/me", {
         </Modal>
       )}
 
+      {/* HR edit modal (only when inactive) */}
       {activeModal === "hr" && (
         <Modal
           title="Update HR Information"
           onClose={() => setActiveModal(null)}
         >
           <form onSubmit={saveHr} className="space-y-4">
+            <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+              <AlertTriangle size={14} className="mt-0.5" />
+              <p>
+                Please provide <strong>real & accurate</strong> information.
+                Once your HR status is marked <strong>active</strong> by the
+                InterviewMate team, your profile will be{" "}
+                <strong>locked and no longer editable</strong> from here.
+              </p>
+            </div>
+
             <p className="text-xs text-gray-500">
-              Please fill in all required HR fields.
+              All fields below are required for HR verification.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -844,12 +969,23 @@ const res = await fetch("/api/users/me", {
         </Modal>
       )}
 
+      {/* Company edit modal (only when inactive) */}
       {activeModal === "company" && (
         <Modal
           title="Update Company Information"
           onClose={() => setActiveModal(null)}
         >
           <form onSubmit={saveCompany} className="space-y-4">
+            <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+              <AlertTriangle size={14} className="mt-0.5" />
+              <p>
+                Please provide <strong>real company details</strong>. Once your
+                company status is marked <strong>active</strong> by the
+                InterviewMate team, this information will be{" "}
+                <strong>locked and no longer editable</strong> from here.
+              </p>
+            </div>
+
             <p className="text-xs text-gray-500">
               Provide accurate company details to help with verification.
             </p>

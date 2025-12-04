@@ -569,15 +569,32 @@ const res = await fetch("/api/users/me", {
                               </Link>
                             )}
 
-                            {/* HR / Company-only: show "Applicant Tracking" */}
-                            {(role === "hr" || role === "company") && (
-                              <Link
-                                href="/applicant_tracking"
-                                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
-                              >
-                                <User size={16} /> Applicant Tracking
-                              </Link>
-                            )}
+                            {/* HR  Applicant Tracking (mobile) */}
+                      {(role === "hr") && (
+                        <Link
+                          href="/applicant_tracking"
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+                        >
+                          <User size={18} /> Applicant Tracking
+                        </Link>
+                      )}
+                      {/* Company can candidate application show  */}
+                       {( role === "company") && (
+                        <Link
+                          href="/candidate_applications"
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+                        >
+                          <User size={18} /> Candidate Applications
+                        </Link>
+                      )}
+                      {( role === "company") && (
+                        <Link
+                          href="/candidate_applications/shortList_candidate"
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+                        >
+                          <User size={18} /> ShortList Candidates
+                        </Link>
+                      )}
 
                             <button
                               onClick={handleLogout}
@@ -761,13 +778,30 @@ const res = await fetch("/api/users/me", {
                         </Link>
                       )}
 
-                      {/* HR / Company-only Applicant Tracking (mobile) */}
-                      {(role === "hr" || role === "company") && (
+                      {/* HR  Applicant Tracking (mobile) */}
+                      {(role === "hr") && (
                         <Link
                           href="/applicant_tracking"
                           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
                         >
                           <User size={18} /> Applicant Tracking
+                        </Link>
+                      )}
+                      {/* Company can candidate application show  */}
+                       {( role === "company") && (
+                        <Link
+                          href="/candidate_applications"
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+                        >
+                          <User size={18} /> Candidate Applications
+                        </Link>
+                      )}
+                       {( role === "company") && (
+                        <Link
+                          href="/candidate_applications/shortList_candidate"
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+                        >
+                          <User size={18} /> ShortList Candidates
                         </Link>
                       )}
 

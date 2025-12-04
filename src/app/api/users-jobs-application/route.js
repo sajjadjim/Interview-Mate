@@ -1,56 +1,20 @@
 // src/app/api/users-jobs-application/route.js
 import { NextResponse } from "next/server";
-import mongoose from "mongoose";
-import { connectDB } from "@/lib/mongodb";
-import { verifyFirebaseIdToken } from "@/lib/firebaseAdmin";
+import { getCollection } from "@/lib/dbConnect";
+import { ObjectId } from "mongodb";
 
-/**
- * Helper: extract and verify Firebase ID token from request headers.
- * Returns { decodedToken } or a NextResponse error.
- */
-async function requireFirebaseUser(req) {
-  const authHeader =
-    req.headers.get("authorization") || req.headers.get("Authorization");
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return { decodedToken: null, error: NextResponse.json(
-      { message: "Unauthorized" },
-      { status: 401 }
-    ) };
-  }
-
-  const token = authHeader.split(" ")[1];
-  const decodedToken = await verifyFirebaseIdToken(token);
-
-  if (!decodedToken) {
-    return {
-      decodedToken: null,
-      error: NextResponse.json(
-        { message: "Invalid or expired token" },
-        { status: 401 }
-      ),
-    };
-  }
-
-  return { decodedToken, error: null };
-}
-
-/**
- * POST /api/users-jobs-application
- * Save a job application into "users_jobs_application".
- * 🔒 Protected by Firebase ID token.
- */
-export async function POST(req) {
+// POST /api/users-jobs-application
+// body: job + candidate info
+export async function POST(request) {
   try {
-    // 1) Check auth
-    const { decodedToken, error } = await requireFirebaseUser(req);
-    if (error) return error;
+    const body = await request.json().catch(() => null);
+    if (!body) {
+      return NextResponse.json(
+        { message: "Invalid JSON body" },
+        { status: 400 }
+      );
+    }
 
-    const firebaseUid = decodedToken.uid;
-    const firebaseEmail = decodedToken.email;
-
-    // 2) Parse body (only job info & optional name/phone from form)
-    const body = await req.json();
     const {
       jobId,
       jobTitle,
@@ -60,27 +24,31 @@ export async function POST(req) {
       location,
       salary,
       postedDate,
+      jobVacancy,
+      jobTime,
+      jobAddress,
+      jobDeadline,
+
+      candidateUid,
+      candidateEmail,
       candidateName,
       candidatePhone,
-    } = body || {};
+      candidateAddress,
+      resumeUrl,
+      appliedAt,
+    } = body;
 
-    if (!jobId) {
+    if (!jobId || !candidateUid || !candidateEmail) {
       return NextResponse.json(
-        { message: "jobId is required." },
+        { message: "jobId, candidateUid and candidateEmail are required" },
         { status: 400 }
       );
     }
 
-    // 3) DB connection
-    await connectDB();
-    const collection = mongoose.connection.collection("users_jobs_application");
+    const col = await getCollection("users_jobs_application");
 
-    // 4) Prevent duplicate: same user + same job
-    const existing = await collection.findOne({
-      jobId,
-      candidateUid: firebaseUid,
-    });
-
+    // Check duplicate (candidate already applied to this job)
+    const existing = await col.findOne({ jobId, candidateUid });
     if (existing) {
       return NextResponse.json(
         { message: "You have already applied for this job." },
@@ -92,71 +60,114 @@ export async function POST(req) {
 
     const doc = {
       jobId,
-      jobTitle: jobTitle || null,
-      company: company || null,
-      sector: sector || null,
-      type: type || null,
-      location: location || null,
-      salary: salary || null, // {min, max, currency}
+      jobTitle,
+      company,
+      sector,
+      type,
+      location,
+      salary,
       postedDate: postedDate ? new Date(postedDate) : null,
+      jobVacancy,
+      jobTime,
+      jobAddress,
+      jobDeadline: jobDeadline ? new Date(jobDeadline) : null,
 
-      // 🔐 from Firebase token (trusted)
-      candidateUid: firebaseUid,
-      candidateEmail: firebaseEmail,
-      candidateName: candidateName || null,
-      candidatePhone: candidatePhone || null,
+      candidateUid,
+      candidateEmail,
+      candidateName,
+      candidatePhone,
+      candidateAddress: candidateAddress || null,
+      resumeUrl: resumeUrl || null,
 
       status: "submitted",
+      appliedAt: appliedAt ? new Date(appliedAt) : now,
+
       createdAt: now,
       updatedAt: now,
     };
 
-    const result = await collection.insertOne(doc);
+    const result = await col.insertOne(doc);
 
     return NextResponse.json(
-      {
-        message: "Application created successfully.",
-        _id: result.insertedId,
-        application: doc,
-      },
+      { ok: true, id: result.insertedId.toString() },
       { status: 201 }
     );
   } catch (err) {
     console.error("POST /api/users-jobs-application error:", err);
     return NextResponse.json(
-      { message: "Internal server error." },
+      { message: "Internal server error" },
       { status: 500 }
     );
   }
 }
 
-/**
- * GET /api/users-jobs-application
- * Example protected read:
- *   - candidate: see only their own applications
- *   - admin/HR (if you add role) could see more
- */
-export async function GET(req) {
+// GET /api/users-jobs-application
+// - use ?candidateUid=...&jobId=... to check one
+// - or you may extend for list queries
+export async function GET(request) {
   try {
-    const { decodedToken, error } = await requireFirebaseUser(req);
-    if (error) return error;
+    const { searchParams } = new URL(request.url);
+    const candidateUid = searchParams.get("candidateUid");
+    const jobId = searchParams.get("jobId");
 
-    await connectDB();
-    const collection = mongoose.connection.collection("users_jobs_application");
+    const col = await getCollection("users_jobs_application");
 
-    // As a simple start: return only current user's applications
-    const firebaseUid = decodedToken.uid;
+    if (candidateUid && jobId) {
+      const docs = await col
+        .find({ candidateUid, jobId })
+        .sort({ createdAt: -1 })
+        .toArray();
 
-    const applications = await collection
-      .find({ candidateUid: firebaseUid })
-      .sort({ createdAt: -1 })
-      .toArray();
+      const safe = docs.map((d) => ({
+        ...d,
+        _id: d._id.toString(),
+      }));
 
-    return NextResponse.json(applications, { status: 200 });
+      return NextResponse.json(safe, { status: 200 });
+    }
+
+    // Default: return empty array or customize as needed
+    return NextResponse.json([], { status: 200 });
   } catch (err) {
     console.error("GET /api/users-jobs-application error:", err);
     return NextResponse.json(
-      { message: "Internal server error." },
+      { message: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/users-jobs-application?applicationId=...
+export async function DELETE(request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const applicationId = searchParams.get("applicationId");
+
+    if (!applicationId) {
+      return NextResponse.json(
+        { message: "applicationId is required" },
+        { status: 400 }
+      );
+    }
+
+    const col = await getCollection("users_jobs_application");
+
+    const result = await col.deleteOne({
+      _id: new ObjectId(applicationId),
+    });
+
+    if (result.deletedCount === 0) {
+      return NextResponse.json(
+        { message: "Application not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  } catch (err) {
+    console.error("DELETE /api/users-jobs-application error:", err);
+    return NextResponse.json(
+      { message: "Internal server error" },
       { status: 500 }
     );
   }

@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
+import LoadingSpinner from "@/app/components/ui/LoadingSpinner";
 
 /**
  * JobDetailsPage
@@ -14,10 +15,12 @@ import { useRouter } from "next/navigation";
  *  - Fetch single job data from /api/jobs/:id
  *  - Fetch logged-in Mongo user from /api/users/me
  *  - Only "candidate" role can apply
+ *  - Candidate MUST have resumeUrl in candidateProfile to apply
  *  - Check if candidate already applied via /api/users-jobs-application
  *  - Disable apply if:
  *      * not logged in
  *      * not candidate
+ *      * no resumeUrl
  *      * deadline is over
  */
 export default function JobDetailsPage({ params }) {
@@ -82,16 +85,15 @@ export default function JobDetailsPage({ params }) {
     const fetchDbUser = async () => {
       try {
         setRoleLoading(true);
-        const idToken = await user.getIdToken(); // from Firebase client SDK
+        const idToken = await user.getIdToken(); // Firebase ID token
 
-const res = await fetch("/api/users/me", {
-  method: "GET", // or PATCH
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${idToken}`,   // 👈 important
-  },
-  // body: JSON.stringify(...profile data...)   // for PATCH only
-});
+        const res = await fetch("/api/users/me", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+        });
 
         if (!res.ok) {
           console.error("Failed to load DB user for job details.");
@@ -114,6 +116,10 @@ const res = await fetch("/api/users/me", {
       active = false;
     };
   }, [user]);
+
+  // Candidate profile + resume presence
+  const candidateProfile = dbUser?.candidateProfile || {};
+  const hasResumeLink = !!candidateProfile.resumeUrl;
 
   // --------- Check if user already applied to this job ----------
   useEffect(() => {
@@ -155,8 +161,7 @@ const res = await fetch("/api/users/me", {
   }, [job, user, role]);
 
   // --------- Derived helpers ----------
-  // Only candidate role & logged in can apply
-  const canApplyBase = !!user && role === "candidate";
+  const isCandidate = !!user && role === "candidate";
 
   // Compute deadline status
   let deadlineDate = null;
@@ -169,7 +174,12 @@ const res = await fetch("/api/users/me", {
     }
   }
 
-  const canApply = canApplyBase && !isDeadlineOver;
+  // Candidate can apply only if:
+  // - logged in as candidate
+  // - resumeUrl is present
+  // - deadline not over
+  const canApply =
+    isCandidate && hasResumeLink && !isDeadlineOver && !hasApplied;
 
   // --------- Handle apply ----------
   const handleApply = async () => {
@@ -195,16 +205,27 @@ const res = await fetch("/api/users/me", {
       return;
     }
 
+    // Extra safety: require resume URL
+    const candidateProfileFromDb = dbUser?.candidateProfile || {};
+    const resumeUrl = candidateProfileFromDb.resumeUrl;
+
+    if (!resumeUrl) {
+      setApplyMessage(
+        "To apply, please add your CV / Resume link in your profile (Profile → Candidate Information → CV / Resume URL)."
+      );
+      return;
+    }
+
     if (!job) return;
 
     setApplyLoading(true);
 
     try {
-      const candidateProfile = dbUser?.candidateProfile || {};
-
       const fullNameFromProfile =
-        (candidateProfile.firstName || "") +
-        (candidateProfile.lastName ? ` ${candidateProfile.lastName}` : "");
+        (candidateProfileFromDb.firstName || "") +
+        (candidateProfileFromDb.lastName
+          ? ` ${candidateProfileFromDb.lastName}`
+          : "");
 
       const candidateName =
         fullNameFromProfile.trim() ||
@@ -213,7 +234,7 @@ const res = await fetch("/api/users/me", {
         (user.email ? user.email.split("@")[0] : "Unknown");
 
       const candidatePhone =
-        candidateProfile.phone ||
+        candidateProfileFromDb.phone ||
         dbUser?.phone ||
         dbUser?.candidatePhone ||
         "";
@@ -236,6 +257,9 @@ const res = await fetch("/api/users/me", {
         candidateEmail: dbUser?.email || user.email,
         candidateName,
         candidatePhone,
+        resumeUrl, // 👈 store candidate's CV link
+
+        appliedAt: new Date().toISOString(), // 👈 exact time of application
       };
 
       const res = await fetch("/api/users-jobs-application", {
@@ -275,7 +299,9 @@ const res = await fetch("/api/users/me", {
   if (loading) {
     return (
       <main className="max-w-3xl mx-auto px-4 py-8">
-        <p>Loading job details...</p>
+        <div className="flex justify-center py-10">
+          <LoadingSpinner size="lg" label="Loading jobs details" />
+        </div>
       </main>
     );
   }
@@ -423,17 +449,19 @@ const res = await fetch("/api/users/me", {
 
         {/* Apply section */}
         <div className="mt-6 space-y-2">
-          {/* Only show apply button for logged-in candidates & within deadline */}
-          {canApply && (
+          {/* Candidate with resume & within deadline */}
+          {isCandidate && (
             <button
               onClick={handleApply}
-              disabled={applyLoading || hasApplied || isDeadlineOver}
+              disabled={!canApply || applyLoading}
               className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {isDeadlineOver
                 ? "Deadline over"
                 : hasApplied
                 ? "Already applied"
+                : !hasResumeLink
+                ? "Add CV in profile to apply"
                 : applyLoading
                 ? "Applying..."
                 : "Apply Now"}
@@ -468,6 +496,14 @@ const res = await fetch("/api/users/me", {
               Only{" "}
               <span className="font-semibold text-gray-700">candidate</span>{" "}
               accounts can apply for jobs.
+            </p>
+          )}
+
+          {/* Candidate missing resume */}
+          {isCandidate && !hasResumeLink && (
+            <p className="text-xs text-red-500">
+              To apply, please add your CV / Resume link in your profile
+              (Profile → Candidate Information → CV / Resume URL).
             </p>
           )}
 
