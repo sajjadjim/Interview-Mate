@@ -1,0 +1,293 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import Swal from "sweetalert2";
+import { Dialog } from "@headlessui/react";
+import { XCircle } from "lucide-react";
+
+export default function PendingHRPage() {
+  const [hrData, setHrData] = useState([]);
+  const [editHR, setEditHR] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("inactive");
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Pagination states
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // Fetch Data
+  useEffect(() => {
+    fetchHRUsers();
+  }, [statusFilter, page]);
+
+  const fetchHRUsers = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/admin/pending-hr?status=${statusFilter}&page=${page}`);
+      if (!res.ok) throw new Error("Failed to fetch");
+
+      const data = await res.json();
+      setHrData(data.hrUsers || []);
+      setTotalPages(data.totalPages || 1);
+    } catch (err) {
+      console.error("Error fetching HR users:", err);
+      // Optional: Don't show alert on load error to avoid spamming user
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleViewDetails = (hr) => {
+    setEditHR(hr);
+    setShowEditModal(true);
+  };
+
+  // Update Profile Info
+  const handleSaveHR = async () => {
+    try {
+      const res = await fetch("/api/admin/pending-hr", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: editHR._id,
+          profileData: editHR.hrProfile,
+        }),
+      });
+
+      if (res.ok) {
+        Swal.fire("Success", "HR profile updated successfully", "success");
+        setShowEditModal(false);
+        fetchHRUsers();
+      } else {
+        throw new Error("Failed to update");
+      }
+    } catch (err) {
+      console.error("Error saving HR profile:", err);
+      Swal.fire("Error", "Failed to save HR profile", "error");
+    }
+  };
+
+  // Update Status (Activate/Deactivate)
+  const handleStatusChange = async (userId, newStatus) => {
+    const action = newStatus === "active" ? "Activate" : "Deactivate";
+
+    Swal.fire({
+      title: `Are you sure?`,
+      text: `Do you want to ${action} this HR?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: newStatus === "active" ? "#10B981" : "#EF4444",
+      confirmButtonText: `Yes, ${action}!`,
+      cancelButtonText: "Cancel",
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          const res = await fetch("/api/admin/pending-hr", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId,
+              status: newStatus,
+            }),
+          });
+
+          if (res.ok) {
+            Swal.fire("Success", `HR status changed to ${newStatus}`, "success");
+            fetchHRUsers(); // Refresh list to remove the moved item
+          } else {
+            const errorData = await res.json();
+            throw new Error(errorData.error || "Failed");
+          }
+        } catch (err) {
+          console.error("Error changing status:", err);
+          Swal.fire("Error", "Failed to change HR status", "error");
+        }
+      }
+    });
+  };
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold text-gray-900">Pending HR Users</h1>
+
+      {/* Status Filter */}
+      <div className="flex gap-4 mb-6">
+        <button
+          onClick={() => { setStatusFilter("inactive"); setPage(1); }}
+          className={`px-6 py-2 rounded-lg font-semibold transition duration-300 ${statusFilter === "inactive" ? "bg-blue-600 text-white shadow-lg" : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+            }`}
+        >
+          Inactive Requests
+        </button>
+        <button
+          onClick={() => { setStatusFilter("active"); setPage(1); }}
+          className={`px-6 py-2 rounded-lg font-semibold transition duration-300 ${statusFilter === "active" ? "bg-green-600 text-white shadow-lg" : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+            }`}
+        >
+          Active HRs
+        </button>
+      </div>
+
+      {/* HR Users Table */}
+      <div className="bg-white rounded-xl shadow-md overflow-hidden min-h-[300px]">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+            Loading Data...
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm text-left">
+              <thead className="bg-gray-100 text-gray-700 uppercase tracking-wider">
+                <tr>
+                  <th className="px-6 py-4 font-semibold">Name</th>
+                  <th className="px-6 py-4 font-semibold">Email</th>
+                  <th className="px-6 py-4 font-semibold">Company</th>
+                  <th className="px-6 py-4 font-semibold">Status</th>
+                  <th className="px-6 py-4 font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {hrData.length > 0 ? (
+                  hrData.map((hr) => (
+                    <tr key={hr._id} className="hover:bg-gray-50 transition">
+                      <td className="px-6 py-4 font-medium text-gray-900">{hr.name}</td>
+                      <td className="px-6 py-4 text-gray-600">{hr.email}</td>
+                      <td className="px-6 py-4 text-gray-600">{hr.hrProfile?.companyName || "N/A"}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${hr.status === "active" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+                          }`}>
+                          {hr.status.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 flex items-center space-x-4">
+                        <button
+                          onClick={() => handleViewDetails(hr)}
+                          className="text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                        >
+                          Details
+                        </button>
+                        <button
+                          onClick={() => handleStatusChange(hr._id, hr.status === "active" ? "inactive" : "active")}
+                          className={`font-medium hover:underline ${hr.status === "active" ? "text-red-600 hover:text-red-800" : "text-green-600 hover:text-green-800"
+                            }`}
+                        >
+                          {hr.status === "active" ? "Deactivate" : "Approve"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
+                      No HR users found in {statusFilter} status.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Pagination */}
+      <div className="flex justify-between items-center pt-4">
+        <button
+          onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+          disabled={page <= 1 || isLoading}
+          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Previous
+        </button>
+        <span className="text-gray-600">Page {page} of {totalPages}</span>
+        <button
+          onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+          disabled={page >= totalPages || isLoading}
+          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Next
+        </button>
+      </div>
+
+      {/* Edit Modal */}
+      <Dialog open={showEditModal} onClose={() => setShowEditModal(false)} className="relative z-50">
+        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl relative">
+            <button onClick={() => setShowEditModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+              <XCircle size={24} />
+            </button>
+            <Dialog.Title className="text-xl font-bold mb-6 text-gray-800">Edit HR Profile</Dialog.Title>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  value={editHR?.hrProfile?.fullName || ""}
+                  onChange={(e) => setEditHR({ ...editHR, hrProfile: { ...editHR.hrProfile, fullName: e.target.value } })}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                <input
+                  type="number"
+                  value={editHR?.hrProfile?.age || ""}
+                  onChange={(e) => setEditHR({ ...editHR, hrProfile: { ...editHR.hrProfile, age: e.target.value } })}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+                <input
+                  type="text"
+                  value={editHR?.hrProfile?.companyName || ""}
+                  onChange={(e) => setEditHR({ ...editHR, hrProfile: { ...editHR.hrProfile, companyName: e.target.value } })}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nid Number</label>
+                <input
+                  type="text"
+                  value={editHR?.hrProfile?.nidNumber || ""}
+                  onChange={(e) => setEditHR({ ...editHR, hrProfile: { ...editHR.hrProfile, nidNumber: e.target.value } })}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Number</label>
+                <input
+                  type="text"
+                  value={editHR?.hrProfile?.contactPhone || ""}
+                  onChange={(e) => setEditHR({ ...editHR, hrProfile: { ...editHR.hrProfile, contactNumber: e.target.value } })}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Company Email</label>
+                <input
+                  type="email"
+                  value={editHR?.hrProfile?.companyEmail || ""}
+                  readOnly
+                  className="w-full p-2 border border-gray-300 rounded-md bg-gray-100 text-gray-500 cursor-not-allowed"
+                />
+              </div>
+            </div>
+
+            <div className="mt-8 flex justify-end gap-3">
+              <button onClick={() => setShowEditModal(false)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50">
+                Cancel
+              </button>
+              <button onClick={handleSaveHR} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                Save Changes
+              </button>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
+    </div>
+  );
+}

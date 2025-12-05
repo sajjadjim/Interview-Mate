@@ -1,0 +1,156 @@
+/* Table Styles */
+.table-container {
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.table th, .table td {
+  padding: 12px 20px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.table th {
+  background-color: #f7fafc;
+  color: #4a5568;
+  font-weight: 600;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.table tr:nth-child(even) {
+  background-color: #f9fafb;
+}
+
+.table tr:hover {
+  background-color: #f1f5f9;
+}
+
+.table-btn {
+  background-color: #3182ce;
+  color: white;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.table-btn:hover {
+  background-color: #2b6cb0;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 20px;
+  width: 50%;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.modal-close {
+  font-size: 24px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.modal-body {
+  margin-top: 20px;
+}
+
+.modal-body input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+.modal-footer button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.modal-footer .cancel-btn {
+  background-color: #e2e8f0;
+  color: #4a5568;
+}
+
+.modal-footer .save-btn {
+  background-color: #38a169;
+  color: white;
+}
+
+.modal-footer .cancel-btn:hover {
+  background-color: #cbd5e0;
+}
+
+.modal-footer .save-btn:hover {
+  background-color: #2f855a;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.pagination button {
+  padding: 8px 12px;
+  margin: 0 5px;
+  border: 1px solid #ddd;
+  background-color: #fff;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.pagination button:hover {
+  background-color: #edf2f7;
+}
+
+.pagination button:disabled {
+  background-color: #f7fafc;
+  cursor: not-allowed;
+}

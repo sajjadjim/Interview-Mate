@@ -19,9 +19,8 @@ import {
   Bell,
   Airplay,
   Activity,
-  PhoneCall
+  PhoneCall,
 } from "lucide-react";
-// import { Airplay } from 'lucide-react';  
 import { useAuth } from "@/context/AuthContext";
 
 /**
@@ -98,9 +97,8 @@ export default function Navbar() {
           method: "GET", // or PATCH
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,   // 👈 important
+            Authorization: `Bearer ${idToken}`, // 👈 important
           },
-          // body: JSON.stringify(...profile data...)   // for PATCH only
         });
 
         if (!res.ok) {
@@ -150,7 +148,15 @@ export default function Navbar() {
    * Notification helpers
    */
   const unreadCount = notifications.filter((n) => !n.read).length;
-  const lastFiveNotifications = notifications.slice(0, 5);
+
+  // ✅ latest 5 notifications (sorted by createdAt DESC)
+  const lastFiveNotifications = [...notifications]
+    .sort((a, b) => {
+      const da = new Date(a.createdAt || 0).getTime();
+      const db = new Date(b.createdAt || 0).getTime();
+      return db - da; // newest first
+    })
+    .slice(0, 5);
 
   /**
    * Logout handler: calls AuthContext.logout, closes menus, routes home.
@@ -330,6 +336,7 @@ export default function Navbar() {
               >
                 IM
               </motion.span>
+            {/* eslint-disable-next-line */}
               <motion.span
                 className="text-xl font-extrabold tracking-tight text-gray-900 group-hover:text-blue-700"
                 whileHover={{ x: 2 }}
@@ -354,10 +361,11 @@ export default function Navbar() {
                   >
                     <Icon
                       size={18}
-                      className={`${active
+                      className={`${
+                        active
                           ? "text-blue-600"
                           : "text-gray-500 group-hover:text-blue-600"
-                        } transition`}
+                      } transition`}
                     />
                     <span>{label}</span>
 
@@ -464,22 +472,27 @@ export default function Navbar() {
                                   onClick={() =>
                                     handleNotificationClick(notif)
                                   }
-                                  className={`w-full text-left px-3 py-2 text-xs border-b border-gray-100 last:border-b-0 hover:bg-gray-50 ${notif.read
+                                  className={`w-full  text-left px-3 py-2 text-xs border-b border-gray-100 last:border-b-0 hover:bg-gray-50 ${
+                                    notif.read
                                       ? "text-gray-600"
                                       : "bg-blue-50/60 text-gray-800"
-                                    }`}
+                                  }`}
                                 >
+                                  {/* ✅ Title */}
                                   <p className="font-semibold truncate">
-                                    {notif.title}
+                                    {notif.title || "Notification"}
                                   </p>
+                                  {/* ✅ Message */}
                                   <p className="mt-0.5 line-clamp-2">
-                                    {notif.message}
+                                    {notif.message ||
+                                      "You have a new notification."}
                                   </p>
+                                  {/* ✅ Time */}
                                   <p className="mt-1 text-[10px] text-gray-400">
                                     {notif.createdAt
                                       ? new Date(
-                                        notif.createdAt
-                                      ).toLocaleString()
+                                          notif.createdAt
+                                        ).toLocaleString()
                                       : ""}
                                   </p>
                                 </button>
@@ -513,8 +526,9 @@ export default function Navbar() {
                       </span>
                       <ChevronDown
                         size={16}
-                        className={`text-gray-500 transition-transform ${userMenuOpen ? "rotate-180" : ""
-                          }`}
+                        className={`text-gray-500 transition-transform ${
+                          userMenuOpen ? "rotate-180" : ""
+                        }`}
                       />
                     </button>
 
@@ -567,17 +581,9 @@ export default function Navbar() {
                                 <User size={16} /> Application
                               </Link>
                             )}
-                            {/* {(role === "candidate" || role === "student") && (
-                              <Link
-                                href="/calling"
-                                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
-                              >
-                                <User size={16} /> Interview Calling
-                              </Link>
-                            )} */}
 
                             {/* HR  Applicant Tracking (mobile) */}
-                            {(role === "hr") && (
+                            {role === "hr" && (
                               <Link
                                 href="/applicant_tracking"
                                 className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
@@ -585,7 +591,7 @@ export default function Navbar() {
                                 <Activity size={18} /> Applicant Tracking
                               </Link>
                             )}
-                            {(role === "hr") && (
+                            {role === "hr" && (
                               <Link
                                 href="/calling"
                                 className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
@@ -594,7 +600,7 @@ export default function Navbar() {
                               </Link>
                             )}
                             {/* Company can candidate application show  */}
-                            {(role === "company") && (
+                            {role === "company" && (
                               <Link
                                 href="/candidate_applications"
                                 className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
@@ -602,7 +608,7 @@ export default function Navbar() {
                                 <User size={18} /> Candidate Applications
                               </Link>
                             )}
-                            {(role === "company") && (
+                            {role === "company" && (
                               <Link
                                 href="/candidate_applications/shortList_candidate"
                                 className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
@@ -792,17 +798,9 @@ export default function Navbar() {
                           <User size={18} /> Application
                         </Link>
                       )}
-                      {/* {(role === "candidate" || role === "student") && (
-                        <Link
-                          href="/calling"
-                          className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
-                        >
-                          <User size={16} /> Interview Calling
-                        </Link>
-                      )} */}
 
                       {/* HR  Applicant Tracking (mobile) */}
-                      {(role === "hr") && (
+                      {role === "hr" && (
                         <Link
                           href="/applicant_tracking"
                           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
@@ -810,7 +808,7 @@ export default function Navbar() {
                           <Activity size={18} /> Applicant Tracking
                         </Link>
                       )}
-                      {(role === "hr") && (
+                      {role === "hr" && (
                         <Link
                           href="/calling"
                           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
@@ -818,8 +816,9 @@ export default function Navbar() {
                           <PhoneCall size={18} /> Interview Calling
                         </Link>
                       )}
+
                       {/* Company can candidate application show  */}
-                      {(role === "company") && (
+                      {role === "company" && (
                         <Link
                           href="/candidate_applications"
                           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
@@ -827,7 +826,7 @@ export default function Navbar() {
                           <User size={18} /> Candidate Applications
                         </Link>
                       )}
-                      {(role === "company") && (
+                      {role === "company" && (
                         <Link
                           href="/candidate_applications/shortList_candidate"
                           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"

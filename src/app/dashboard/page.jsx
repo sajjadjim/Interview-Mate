@@ -1,20 +1,23 @@
-// src/app/dashboard/page.jsx
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import RequireAuth from "../components/RequireAuth";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
+import { useRouter } from "next/navigation";  // Make sure router is imported
+
 import {
   Briefcase,
   Users,
   Building2,
   CalendarDays,
   MapPin,
+  DollarSign
 } from "lucide-react";
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
+  const router = useRouter(); // Initialize router
 
   const [dbUser, setDbUser] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -27,6 +30,13 @@ export default function DashboardPage() {
   const [totalApplications, setTotalApplications] = useState(0);
   const [latestJobs, setLatestJobs] = useState([]);
   const [applicationsPerJob, setApplicationsPerJob] = useState({});
+
+  // Admin stats (to show on the admin dashboard)
+  const [adminStatsLoading, setAdminStatsLoading] = useState(false);
+  const [adminStatsError, setAdminStatsError] = useState("");
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [inactiveUsers, setInactiveUsers] = useState(0);
+  const [candidateApplications, setCandidateApplications] = useState(0);
 
   useEffect(() => {
     document.title = "Dashboard";
@@ -47,7 +57,6 @@ export default function DashboardPage() {
       setProfileError("");
 
       try {
-        // Secure: /api/users/me expects Firebase ID token in Authorization header
         const token = await user.getIdToken();
         const res = await fetch("/api/users/me", {
           headers: {
@@ -98,9 +107,6 @@ export default function DashboardPage() {
         const res = await fetch(
           `/api/company/candidate-applications?${params.toString()}`,
           {
-            // Works for both:
-            //  - secure version (uses Authorization + decoded uid)
-            //  - simpler version (uses ?email=)
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -133,13 +139,48 @@ export default function DashboardPage() {
     }
   }, [authLoading, profileLoading, role, user, dbUser]);
 
-  const latestJobsSafe = useMemo(
-    () => (Array.isArray(latestJobs) ? latestJobs : []),
-    [latestJobs]
-  );
+  // 3) Admin Stats: Total Users, Inactive Users, and Candidate Applications
+  useEffect(() => {
+    const loadAdminStats = async () => {
+      if (!user || role !== "admin") return;
 
-  // While auth/profile loading → show spinner
-  if (authLoading || profileLoading) {
+      setAdminStatsLoading(true);
+      setAdminStatsError("");
+
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/admin/stats", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data?.message || "Failed to load admin stats.");
+        }
+
+        const data = await res.json();
+
+        setTotalUsers(data.totalUsers || 0);
+        setInactiveUsers(data.inactiveUsers || 0);
+        setCandidateApplications(data.candidateApplications || 0);
+      } catch (err) {
+        console.error("Dashboard admin stats error:", err);
+        setAdminStatsError(err.message || "Failed to load admin stats.");
+      } finally {
+        setAdminStatsLoading(false);
+      }
+    };
+
+    if (!authLoading && !profileLoading && role === "admin") {
+      loadAdminStats();
+    }
+  }, [authLoading, profileLoading, role, user]);
+
+  // Handle loading state for both admin and company stats
+  if (authLoading || profileLoading || (role === "company" && companyStatsLoading) || (role === "admin" && adminStatsLoading)) {
     return (
       <RequireAuth>
         <main className="max-w-4xl mx-auto px-4 py-16">
@@ -188,14 +229,83 @@ export default function DashboardPage() {
           )}
         </section>
 
-        {/* ===== COMPANY DASHBOARD SUMMARY ===== */}
+        {/* ===== ADMIN STATS (IF ADMIN) ===== */}
+        {role === "admin" && (
+          <section className="space-y-5">
+            <h2 className="text-lg font-semibold text-gray-900">Admin Overview</h2>
+
+            {/* Admin Actions */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl bg-white border border-gray-200 p-4 flex items-center gap-3">
+                <button
+                  className="inline-flex items-center gap-2 text-sm text-blue-600"
+                  onClick={() => router.push("/admin/pending-hr")}
+                >
+                  <Users size={20} />
+                  Pending HR
+                </button>
+              </div>
+
+              <div className="rounded-xl bg-white border border-gray-200 p-4 flex items-center gap-3">
+                <button
+                  className="inline-flex items-center gap-2 text-sm text-blue-600"
+                  onClick={() => router.push("/admin/pending-company-profile")}
+                >
+                  <Building2 size={20} />
+                  Pending Company Profile
+                </button>
+              </div>
+
+              <div className="rounded-xl bg-white border border-gray-200 p-4 flex items-center gap-3">
+                <button
+                  className="inline-flex items-center gap-2 text-sm text-blue-600"
+                  onClick={() => router.push("/admin/candidate-payment")}
+                >
+                  <DollarSign size={20} />
+                  Candidate Payment
+                </button>
+              </div>
+            </div>
+
+            {/* Admin Stats */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl bg-white border border-gray-200 p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
+                  <Users size={20} className="text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Total Users</p>
+                  <p className="text-2xl font-semibold text-gray-900">
+                    {adminStatsLoading ? "…" : totalUsers}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-white border border-gray-200 p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-emerald-50 flex items-center justify-center">
+                  <Users size={20} className="text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Inactive Users</p>
+                  <p className="text-2xl font-semibold text-gray-900">
+                    {adminStatsLoading ? "…" : inactiveUsers}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-white border border-gray-200 p-4">
+              <p className="text-sm text-gray-500">Total Applications: {candidateApplications}</p>
+            </div>
+          </section>
+        )}
+
+        {/* ===== COMPANY DASHBOARD (IF COMPANY) ===== */}
         {role === "company" && (
           <section className="space-y-5">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Company Overview
-            </h2>
+            <h2 className="text-lg font-semibold text-gray-900">Company Overview</h2>
 
-            {/* Summary cards */}
+            {/* Company stats summary */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-xl bg-white border border-gray-200 p-4 flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
@@ -225,12 +335,6 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-
-            {companyStatsError && (
-              <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                {companyStatsError}
-              </p>
-            )}
 
             {/* Latest jobs table */}
             {!companyStatsLoading && latestJobsSafe.length > 0 && (
@@ -334,17 +438,6 @@ export default function DashboardPage() {
                 applications.
               </p>
             )}
-          </section>
-        )}
-
-        {/* ===== SIMPLE DASHBOARD FOR OTHER ROLES ===== */}
-        {role !== "company" && (
-          <section className="rounded-xl bg-white border border-gray-200 p-4">
-            <p className="text-sm text-gray-700">
-              This is your personal dashboard. In future, you can show candidate
-              / HR specific analytics here (e.g. applications, interviews,
-              approvals).
-            </p>
           </section>
         )}
       </main>
