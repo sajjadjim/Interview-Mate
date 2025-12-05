@@ -17,7 +17,9 @@ import {
   User,
   ChevronDown,
   Bell,
-  Airplay
+  Airplay,
+  Activity,
+  PhoneCall
 } from "lucide-react";
 // import { Airplay } from 'lucide-react';  
 import { useAuth } from "@/context/AuthContext";
@@ -92,14 +94,14 @@ export default function Navbar() {
         setRoleLoading(true);
         const idToken = await user.getIdToken(); // from Firebase client SDK
 
-const res = await fetch("/api/users/me", {
-  method: "GET", // or PATCH
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${idToken}`,   // 👈 important
-  },
-  // body: JSON.stringify(...profile data...)   // for PATCH only
-});
+        const res = await fetch("/api/users/me", {
+          method: "GET", // or PATCH
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,   // 👈 important
+          },
+          // body: JSON.stringify(...profile data...)   // for PATCH only
+        });
 
         if (!res.ok) {
           console.error("Failed to load DB user for navbar.");
@@ -352,11 +354,10 @@ const res = await fetch("/api/users/me", {
                   >
                     <Icon
                       size={18}
-                      className={`${
-                        active
+                      className={`${active
                           ? "text-blue-600"
                           : "text-gray-500 group-hover:text-blue-600"
-                      } transition`}
+                        } transition`}
                     />
                     <span>{label}</span>
 
@@ -463,11 +464,10 @@ const res = await fetch("/api/users/me", {
                                   onClick={() =>
                                     handleNotificationClick(notif)
                                   }
-                                  className={`w-full text-left px-3 py-2 text-xs border-b border-gray-100 last:border-b-0 hover:bg-gray-50 ${
-                                    notif.read
+                                  className={`w-full text-left px-3 py-2 text-xs border-b border-gray-100 last:border-b-0 hover:bg-gray-50 ${notif.read
                                       ? "text-gray-600"
                                       : "bg-blue-50/60 text-gray-800"
-                                  }`}
+                                    }`}
                                 >
                                   <p className="font-semibold truncate">
                                     {notif.title}
@@ -478,8 +478,8 @@ const res = await fetch("/api/users/me", {
                                   <p className="mt-1 text-[10px] text-gray-400">
                                     {notif.createdAt
                                       ? new Date(
-                                          notif.createdAt
-                                        ).toLocaleString()
+                                        notif.createdAt
+                                      ).toLocaleString()
                                       : ""}
                                   </p>
                                 </button>
@@ -513,9 +513,8 @@ const res = await fetch("/api/users/me", {
                       </span>
                       <ChevronDown
                         size={16}
-                        className={`text-gray-500 transition-transform ${
-                          userMenuOpen ? "rotate-180" : ""
-                        }`}
+                        className={`text-gray-500 transition-transform ${userMenuOpen ? "rotate-180" : ""
+                          }`}
                       />
                     </button>
 
@@ -568,33 +567,49 @@ const res = await fetch("/api/users/me", {
                                 <User size={16} /> Application
                               </Link>
                             )}
+                            {/* {(role === "candidate" || role === "student") && (
+                              <Link
+                                href="/calling"
+                                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
+                              >
+                                <User size={16} /> Interview Calling
+                              </Link>
+                            )} */}
 
                             {/* HR  Applicant Tracking (mobile) */}
-                      {(role === "hr") && (
-                        <Link
-                          href="/applicant_tracking"
-                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
-                        >
-                          <User size={18} /> Applicant Tracking
-                        </Link>
-                      )}
-                      {/* Company can candidate application show  */}
-                       {( role === "company") && (
-                        <Link
-                          href="/candidate_applications"
-                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
-                        >
-                          <User size={18} /> Candidate Applications
-                        </Link>
-                      )}
-                      {( role === "company") && (
-                        <Link
-                          href="/candidate_applications/shortList_candidate"
-                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
-                        >
-                          <User size={18} /> ShortList Candidates
-                        </Link>
-                      )}
+                            {(role === "hr") && (
+                              <Link
+                                href="/applicant_tracking"
+                                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+                              >
+                                <Activity size={18} /> Applicant Tracking
+                              </Link>
+                            )}
+                            {(role === "hr") && (
+                              <Link
+                                href="/calling"
+                                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+                              >
+                                <PhoneCall size={18} /> Interview Calling
+                              </Link>
+                            )}
+                            {/* Company can candidate application show  */}
+                            {(role === "company") && (
+                              <Link
+                                href="/candidate_applications"
+                                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+                              >
+                                <User size={18} /> Candidate Applications
+                              </Link>
+                            )}
+                            {(role === "company") && (
+                              <Link
+                                href="/candidate_applications/shortList_candidate"
+                                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+                              >
+                                <User size={18} /> ShortList Candidates
+                              </Link>
+                            )}
 
                             <button
                               onClick={handleLogout}
@@ -777,6 +792,14 @@ const res = await fetch("/api/users/me", {
                           <User size={18} /> Application
                         </Link>
                       )}
+                      {/* {(role === "candidate" || role === "student") && (
+                        <Link
+                          href="/calling"
+                          className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
+                        >
+                          <User size={16} /> Interview Calling
+                        </Link>
+                      )} */}
 
                       {/* HR  Applicant Tracking (mobile) */}
                       {(role === "hr") && (
@@ -784,11 +807,19 @@ const res = await fetch("/api/users/me", {
                           href="/applicant_tracking"
                           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
                         >
-                          <User size={18} /> Applicant Tracking
+                          <Activity size={18} /> Applicant Tracking
+                        </Link>
+                      )}
+                      {(role === "hr") && (
+                        <Link
+                          href="/calling"
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+                        >
+                          <PhoneCall size={18} /> Interview Calling
                         </Link>
                       )}
                       {/* Company can candidate application show  */}
-                       {( role === "company") && (
+                      {(role === "company") && (
                         <Link
                           href="/candidate_applications"
                           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
@@ -796,7 +827,7 @@ const res = await fetch("/api/users/me", {
                           <User size={18} /> Candidate Applications
                         </Link>
                       )}
-                       {( role === "company") && (
+                      {(role === "company") && (
                         <Link
                           href="/candidate_applications/shortList_candidate"
                           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"

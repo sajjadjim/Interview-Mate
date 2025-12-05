@@ -249,7 +249,7 @@ export default function ApplicantTrackingPage() {
                             <span>{rec.applicantEmail}</span>
                           </div>
                           <p className="mt-1 text-[11px] text-slate-400">
-                            App ID: {rec.applicationId}
+                            Room ID (Calling Room): {rec.applicationId}
                           </p>
                         </div>
                       </td>

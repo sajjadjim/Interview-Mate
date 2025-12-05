@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Video, PhoneCall, PhoneOff, Clock, AlertTriangle } from "lucide-react";
+import { ZegoUIKitPrebuilt } from "@zegocloud/zego-uikit-prebuilt";
 
 // ---- ZEGOCLOUD env config ----
 const ZEGO_APP_ID = Number(process.env.NEXT_PUBLIC_ZEGO_APP_ID || 0);
@@ -21,11 +22,10 @@ function formatTime(seconds) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-export default function CallingPage({ searchParams }) {
-  // Optional: you can open /calling?roomId=xxx&name=yyy
-  const initialRoomId = searchParams?.roomId || "InterviewMate_12345";
-  const initialDisplayName = searchParams?.name || "HR";
-
+export default function InterviewCallClient({
+  initialRoomId = "InterviewMate_12345",
+  initialDisplayName = "HR",
+}) {
   const [roomId, setRoomId] = useState(initialRoomId);
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [joined, setJoined] = useState(false);
@@ -69,7 +69,7 @@ export default function CallingPage({ searchParams }) {
   }, [joined, callEnded]);
 
   // Create & join ZEGOCLOUD room
-  const joinZegoRoom = useCallback(async () => {
+  const joinZegoRoom = useCallback(() => {
     if (!containerRef.current) {
       console.error("No containerRef for ZEGOCLOUD");
       return;
@@ -83,16 +83,11 @@ export default function CallingPage({ searchParams }) {
       return;
     }
 
-    // 🔥 IMPORTANT: dynamic import so it only runs in the browser
-    const { ZegoUIKitPrebuilt } = await import(
-      "@zegocloud/zego-uikit-prebuilt"
-    );
-
-    const userID = `${Date.now()}_${Math.floor(Math.random() * 1000)}`; // You can replace with Firebase uid
+    const userID = `${Date.now()}_${Math.floor(Math.random() * 1000)}`; // you can swap with Firebase uid
     const userName = displayName || "Interview User";
     const roomID = cleanedRoomId;
 
-    // For dev/demo only. For production, generate this token in a backend.
+    // For dev/demo only. In production, generate this token from a secure backend.
     const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
       ZEGO_APP_ID,
       ZEGO_SERVER_SECRET,
@@ -137,11 +132,11 @@ export default function CallingPage({ searchParams }) {
     });
   }, [cleanedRoomId, displayName, hasZegoConfig]);
 
-  const handleJoin = async () => {
+  const handleJoin = () => {
     setJoined(true);
     setCallEnded(false);
     setTimeLeft(30 * 60);
-    await joinZegoRoom();
+    joinZegoRoom();
   };
 
   const handleLeave = () => {
