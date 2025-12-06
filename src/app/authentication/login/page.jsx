@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   signInWithPopup,
@@ -8,38 +8,46 @@ import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
 } from "firebase/auth";
-import { auth } from "@/lib/firebase"; // 👈 make sure this points to your firebase.js
-import { useAuth } from "@/context/AuthContext"; // 👈 from the AuthProvider we created
-import { Loader2, LogIn } from "lucide-react";
+import { auth } from "@/lib/firebase";
+import { useAuth } from "@/context/AuthContext";
+import { Loader2, LogIn, X } from "lucide-react";
 import { FaGoogle } from "react-icons/fa";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import Lottie from "lottie-react";
-import animationData from "../../../../public/Password Authentication.json"; // your Lottie file
+import Swal from "sweetalert2";
+import animationData from "../../../../public/Password Authentication.json";
 
 export default function LoginPage() {
+  // Login States
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
+  
+  // UI States
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isPhoneLogin, setIsPhoneLogin] = useState(false);
   const [isOtpSent, setIsOtpSent] = useState(false);
 
+  // Forgot Password States
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+
   const router = useRouter();
-  const { login } = useAuth(); // 👈 global Firebase email/password login
+  const { login } = useAuth();
 
   // ---------------- EMAIL LOGIN ----------------
   const handleEmailLogin = async (e) => {
     e.preventDefault();
-    if (isPhoneLogin) return; // safety, should not hit here in phone mode
+    if (isPhoneLogin) return;
 
     setLoading(true);
     setError("");
 
     try {
-      await login(email, password); // 👈 uses AuthContext (signInWithEmailAndPassword inside)
+      await login(email, password);
       router.push("/dashboard");
     } catch (err) {
       console.error(err);
@@ -57,7 +65,6 @@ export default function LoginPage() {
 
     try {
       await signInWithPopup(auth, provider);
-      // onAuthStateChanged in AuthContext will sync user to DB
       router.push("/dashboard");
     } catch (err) {
       console.error(err);
@@ -67,25 +74,22 @@ export default function LoginPage() {
     }
   };
 
-  // ---------------- RECAPTCHA SETUP (PHONE) ----------------
-  const setUpRecaptcha = () => {
-    if (typeof window === "undefined") return;
-
-    if (!window.recaptchaVerifier) {
+  // ---------------- PHONE LOGIN SETUP ----------------
+  useEffect(() => {
+    if (isPhoneLogin && !window.recaptchaVerifier) {
       window.recaptchaVerifier = new RecaptchaVerifier(
+        auth,
         "recaptcha-container",
         {
-          size: "invisible", // or "normal" if you want to show the widget
+          size: "invisible",
           callback: (response) => {
-            console.log("reCAPTCHA verified:", response);
+            // reCAPTCHA solved
           },
-        },
-        auth
+        }
       );
     }
-  };
+  }, [isPhoneLogin]);
 
-  // ---------------- SEND OTP (PHONE) ----------------
   const handlePhoneSendOtp = async () => {
     setLoading(true);
     setError("");
@@ -97,9 +101,7 @@ export default function LoginPage() {
         return;
       }
 
-      setUpRecaptcha();
       const appVerifier = window.recaptchaVerifier;
-
       const confirmationResult = await signInWithPhoneNumber(
         auth,
         phone,
@@ -108,15 +110,19 @@ export default function LoginPage() {
 
       window.confirmationResult = confirmationResult;
       setIsOtpSent(true);
+      Swal.fire("OTP Sent!", "Check your phone for the code.", "success");
     } catch (err) {
       console.error(err);
-      setError("Phone number authentication failed. Please try again.");
+      setError("Failed to send OTP. Ensure format is +8801XXXXXXXXX");
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = null;
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // ---------------- VERIFY OTP (PHONE) ----------------
   const handleOtpSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -125,23 +131,69 @@ export default function LoginPage() {
     try {
       const confirmationResult = window.confirmationResult;
       if (!confirmationResult) {
-        setError("Please request an OTP first.");
-        setLoading(false);
+        setError("Session expired. Please request OTP again.");
         return;
       }
 
       await confirmationResult.confirm(otp);
-      // onAuthStateChanged in AuthContext will sync user to DB
       router.push("/dashboard");
     } catch (err) {
       console.error(err);
-      setError("OTP verification failed. Please try again.");
+      setError("Invalid OTP. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  // ---------------- TOGGLE LOGIN METHOD ----------------
+// ... inside your LoginPage component
+
+  const handlePasswordReset = async (e) => {
+    e.preventDefault();
+    if (!resetEmail) {
+      Swal.fire("Error", "Please enter your email address", "error");
+      return;
+    }
+
+    // Loading State
+    Swal.fire({
+      title: 'Checking Account...',
+      text: 'Please wait...',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resetEmail }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        // SUCCESS: Email sent
+        Swal.fire(
+          "Check Your Inbox",
+          "We sent a reset link to your email.",
+          "success"
+        );
+        setShowResetModal(false);
+        setResetEmail("");
+      } else {
+        // ERROR: Show the specific reason (Google/Phone/Not Found)
+        // This will now say: "You signed up with Google. Please click..."
+        Swal.fire("Cannot Reset Password", data.error, "warning");
+      }
+    } catch (error) {
+      console.error(error);
+      Swal.fire("Error", "Something went wrong. Please try again.", "error");
+    }
+  };
+
+  // ---------------- UI TOGGLES ----------------
   const showEmailLogin = () => {
     setIsPhoneLogin(false);
     setIsOtpSent(false);
@@ -155,278 +207,235 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen justify-center items-center p-6 md:p-12">
-      {/* Lottie Animation (Left Side) */}
+    <div className="flex flex-col md:flex-row min-h-screen justify-center items-center p-6 md:p-12 relative">
+      
+      {/* Lottie Animation */}
       <div className="w-full md:w-1/2 h-full mb-6 md:mb-0">
         <Lottie
           animationData={animationData}
           loop={true}
-          className="w-full h-full"
+          className="w-full h-full max-h-[500px]"
         />
       </div>
 
-      {/* Login Form (Right Side) */}
+      {/* Login Form */}
       <motion.div
-        className="w-full md:w-1/2 bg-white/60 backdrop-blur-lg p-8 rounded-xl shadow-xl"
+        className="w-full md:w-1/2 bg-white/80 backdrop-blur-lg p-8 rounded-xl shadow-2xl border border-white/50"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
       >
-        <h2 className="text-3xl font-semibold text-center text-gray-800 mb-8">
-          Sign In to <span className="text-blue-600">InterviewMate</span>
-        </h2>
+        <h2 className="text-3xl font-bold text-center text-gray-800 mb-2">Welcome Back</h2>
+        <p className="text-center text-gray-500 mb-8">
+          Sign in to <span className="text-blue-600 font-semibold">InterviewMate</span>
+        </p>
 
-        {/* Toggle for Email vs Phone Login */}
-        <div className="flex justify-center gap-4 mb-6">
+        {/* Toggle Buttons */}
+        <div className="flex justify-center gap-4 mb-6 bg-gray-100 p-1 rounded-lg w-fit mx-auto">
           <button
             type="button"
             onClick={showEmailLogin}
-            className={`py-2 px-4 rounded-md ${
-              !isPhoneLogin
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 text-gray-700"
+            className={`py-2 px-6 rounded-md text-sm font-medium transition-all ${
+              !isPhoneLogin ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            Email Login
+            Email
           </button>
           <button
             type="button"
             onClick={showPhoneLogin}
-            className={`py-2 px-4 rounded-md ${
-              isPhoneLogin
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 text-gray-700"
+            className={`py-2 px-6 rounded-md text-sm font-medium transition-all ${
+              isPhoneLogin ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            Phone Login
+            Phone
           </button>
         </div>
 
-        {/* Invisible reCAPTCHA container (required for phone auth) */}
         <div id="recaptcha-container" className="hidden" />
 
-        {/* EMAIL LOGIN FORM */}
+        {/* EMAIL FORM */}
         {!isPhoneLogin && (
-          <form onSubmit={handleEmailLogin} className="space-y-6">
-            {/* Email Input */}
-            <motion.div
-              className="relative"
-              whileHover={{ scale: 1.05 }}
-              transition={{ duration: 0.3 }}
-            >
-              <label
-                htmlFor="email"
-                className="text-sm font-medium text-gray-700"
-              >
-                Email
-              </label>
+          <form onSubmit={handleEmailLogin} className="space-y-5">
+            <div>
+              <label className="text-sm font-medium text-gray-700">Email Address</label>
               <input
-                id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="you@example.com"
-                className="w-full px-4 py-3 mt-2 rounded-md border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-4 py-3 mt-1 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition"
               />
-            </motion.div>
+            </div>
 
-            {/* Password Input */}
-            <motion.div
-              className="relative"
-              whileHover={{ scale: 1.05 }}
-              transition={{ duration: 0.3 }}
-            >
-              <label
-                htmlFor="password"
-                className="text-sm font-medium text-gray-700"
-              >
-                Password
-              </label>
+            <div>
+              <label className="text-sm font-medium text-gray-700">Password</label>
               <input
-                id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                placeholder="Enter your password"
-                className="w-full px-4 py-3 mt-2 rounded-md border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-4 py-3 mt-1 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition"
               />
-            </motion.div>
+              <div className="flex justify-end mt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowResetModal(true)}
+                  className="text-xs text-blue-600 hover:underline font-medium"
+                >
+                  Forgot Password?
+                </button>
+              </div>
+            </div>
 
-            {/* Error Message */}
-            {error && (
-              <motion.p
-                className="text-red-500 text-sm mt-2"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.5 }}
-              >
-                {error}
-              </motion.p>
-            )}
+            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
-            {/* Submit Button */}
-            <motion.div
-              className="relative"
-              whileHover={{ scale: 1.05 }}
-              transition={{ duration: 0.3 }}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-70 transition flex justify-center items-center gap-2"
             >
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-blue-600 text-white font-semibold rounded-md flex items-center justify-center gap-2 hover:bg-blue-700 disabled:bg-blue-300"
-              >
-                {loading ? (
-                  <Loader2 className="animate-spin" size={18} />
-                ) : (
-                  <LogIn size={18} />
-                )}
-                {loading ? "Logging in..." : "Login"}
-              </button>
-            </motion.div>
+              {loading ? <Loader2 className="animate-spin" size={20} /> : <LogIn size={20} />}
+              {loading ? "Signing In..." : "Sign In"}
+            </button>
           </form>
         )}
 
-        {/* PHONE LOGIN FLOW */}
+        {/* PHONE FORM */}
         {isPhoneLogin && (
-          <form
-            onSubmit={isOtpSent ? handleOtpSubmit : (e) => e.preventDefault()}
-            className="space-y-6"
-          >
-            {/* Phone Input */}
-            <motion.div
-              className="relative"
-              whileHover={{ scale: 1.05 }}
-              transition={{ duration: 0.3 }}
-            >
-              <label
-                htmlFor="phone"
-                className="text-sm font-medium text-gray-700"
-              >
-                Phone Number
-              </label>
+          <form onSubmit={isOtpSent ? handleOtpSubmit : (e) => e.preventDefault()} className="space-y-5">
+            <div>
+              <label className="text-sm font-medium text-gray-700">Phone Number</label>
               <input
-                id="phone"
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 required
-                placeholder="+880 1XXX-XXXXXX"
-                className="w-full px-4 py-3 mt-2 rounded-md border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                placeholder="+8801XXXXXXXXX"
+                className="w-full px-4 py-3 mt-1 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
               />
-            </motion.div>
+            </div>
 
-            {/* Send OTP button */}
             {!isOtpSent && (
-              <motion.div
-                className="relative"
-                whileHover={{ scale: 1.05 }}
-                transition={{ duration: 0.3 }}
+              <button
+                type="button"
+                onClick={handlePhoneSendOtp}
+                disabled={loading}
+                className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-70 transition flex justify-center items-center gap-2"
               >
-                <button
-                  type="button"
-                  onClick={handlePhoneSendOtp}
-                  disabled={loading}
-                  className="w-full py-3 bg-blue-600 text-white font-semibold rounded-md flex items-center justify-center gap-2 hover:bg-blue-700 disabled:bg-blue-300"
-                >
-                  {loading ? (
-                    <Loader2 className="animate-spin" size={18} />
-                  ) : (
-                    <LogIn size={18} />
-                  )}
-                  {loading ? "Sending OTP..." : "Send OTP"}
-                </button>
-              </motion.div>
+                {loading ? <Loader2 className="animate-spin" size={20} /> : "Send OTP Code"}
+              </button>
             )}
 
-            {/* OTP Input */}
             {isOtpSent && (
-              <>
-                <motion.div
-                  className="relative"
-                  whileHover={{ scale: 1.05 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <label
-                    htmlFor="otp"
-                    className="text-sm font-medium text-gray-700"
-                  >
-                    Enter OTP
-                  </label>
-                  <input
-                    id="otp"
-                    type="text"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    required
-                    placeholder="Enter the OTP sent to your phone"
-                    className="w-full px-4 py-3 mt-2 rounded-md border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  />
-                </motion.div>
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}>
+                <label className="text-sm font-medium text-gray-700">Verification Code</label>
+                <input
+                  type="text"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 mt-1 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-center tracking-widest text-lg"
+                />
+                
+                {error && <p className="text-red-500 text-sm text-center mt-2">{error}</p>}
 
-                {/* Error Message */}
-                {error && (
-                  <motion.p
-                    className="text-red-500 text-sm mt-2"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.5 }}
-                  >
-                    {error}
-                  </motion.p>
-                )}
-
-                {/* Verify OTP Button */}
-                <motion.div
-                  className="relative"
-                  whileHover={{ scale: 1.05 }}
-                  transition={{ duration: 0.3 }}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3 mt-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-70 transition flex justify-center items-center gap-2"
                 >
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full py-3 bg-blue-600 text-white font-semibold rounded-md flex items-center justify-center gap-2 hover:bg-blue-700 disabled:bg-blue-300"
-                  >
-                    {loading ? (
-                      <Loader2 className="animate-spin" size={18} />
-                    ) : (
-                      <LogIn size={18} />
-                    )}
-                    {loading ? "Verifying..." : "Verify & Login"}
-                  </button>
-                </motion.div>
-              </>
+                  {loading ? <Loader2 className="animate-spin" size={20} /> : "Verify & Login"}
+                </button>
+              </motion.div>
             )}
           </form>
         )}
 
-        {/* Google Sign-In Button */}
-        <motion.div
-          whileHover={{ scale: 1.05 }}
-          transition={{ duration: 0.3 }}
-        >
-          <button
-            onClick={handleGoogleLogin}
-            disabled={loading}
-            className="w-full py-3 mt-6 bg-white border border-gray-300 text-gray-700 font-semibold rounded-md flex items-center justify-center gap-2 hover:bg-gray-100"
-          >
-            <FaGoogle size={18} />
-            {loading ? "Signing in..." : "Continue with Google"}
-          </button>
-        </motion.div>
-
-        {/* Register Link */}
-        <div className="text-center mt-4 text-sm text-gray-600">
-          Don&apos;t have an account?{" "}
-          <Link
-            href="/authentication/register"
-            className="text-blue-600 hover:underline"
-          >
-            Register here
-          </Link>
+        {/* Social Login Divider */}
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white text-gray-500">Or continue with</span>
+          </div>
         </div>
+
+        <button
+          onClick={handleGoogleLogin}
+          className="w-full py-3 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-lg flex items-center justify-center gap-3 transition"
+        >
+          <FaGoogle className="text-red-500" size={20} />
+          <span>Sign in with Google</span>
+        </button>
+
+        <p className="text-center mt-6 text-sm text-gray-600">
+          New to InterviewMate?{" "}
+          <Link href="/authentication/register" className="text-blue-600 font-semibold hover:underline">
+            Create an account
+          </Link>
+        </p>
       </motion.div>
+
+      {/* --- FORGOT PASSWORD MODAL --- */}
+      <AnimatePresence>
+        {showResetModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative"
+            >
+              <button
+                onClick={() => setShowResetModal(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
+              </button>
+              
+              <h3 className="text-xl font-bold text-gray-800 mb-2">Reset Password</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Enter your email address to receive a secure reset link.
+              </p>
+
+              <form onSubmit={handlePasswordReset}>
+                <label className="text-sm font-medium text-gray-700">Email Address</label>
+                <input
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  required
+                  placeholder="you@example.com"
+                  className="w-full px-4 py-3 mt-1 mb-6 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowResetModal(false)}
+                    className="flex-1 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-blue-600 rounded-lg text-white font-medium hover:bg-blue-700"
+                  >
+                    Send Link
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
