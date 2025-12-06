@@ -1,7 +1,6 @@
-// src/app/jobs/[id]/page.jsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react"; // Added 'use' import
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
@@ -10,21 +9,11 @@ import LoadingSpinner from "@/app/components/ui/LoadingSpinner";
 
 /**
  * JobDetailsPage
- *
- * Responsibilities:
- *  - Fetch single job data from /api/jobs/:id
- *  - Fetch logged-in Mongo user from /api/users/me
- *  - Only "candidate" role can apply
- *  - Candidate MUST have resumeUrl in candidateProfile to apply
- *  - Check if candidate already applied via /api/users-jobs-application
- *  - Disable apply if:
- *      * not logged in
- *      * not candidate
- *      * no resumeUrl
- *      * deadline is over
  */
 export default function JobDetailsPage({ params }) {
-  const { id } = params;
+  // 🟢 FIX: Unwrap the params promise using React.use()
+  const resolvedParams = use(params);
+  const id = resolvedParams.id;
 
   // Job state
   const [job, setJob] = useState(null);
@@ -45,6 +34,8 @@ export default function JobDetailsPage({ params }) {
 
   // --------- Load job details ----------
   useEffect(() => {
+    if (!id) return; // Guard clause
+
     async function fetchJob() {
       setLoading(true);
       try {
@@ -257,9 +248,9 @@ export default function JobDetailsPage({ params }) {
         candidateEmail: dbUser?.email || user.email,
         candidateName,
         candidatePhone,
-        resumeUrl, // 👈 store candidate's CV link
+        resumeUrl, 
 
-        appliedAt: new Date().toISOString(), // 👈 exact time of application
+        appliedAt: new Date().toISOString(), 
       };
 
       const res = await fetch("/api/users-jobs-application", {

@@ -1,4 +1,3 @@
-// src/app/api/jobs/[id]/route.js
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/dbConnect";
 import { ObjectId } from "mongodb";
@@ -7,11 +6,12 @@ import { ObjectId } from "mongodb";
  * GET /api/jobs/:id
  *
  * Tries to find job by:
- *  - custom id  (id: "JOB-004")
- *  - Mongo _id (ObjectId)
+ * - custom id  (id: "JOB-004")
+ * - Mongo _id (ObjectId)
  */
 export async function GET(request, { params }) {
-  const { id } = params;
+  // 🟢 FIX: 'params' is a Promise in Next.js 15, so we must await it.
+  const { id } = await params;
 
   try {
     const jobsCollection = await getCollection("jobs");
