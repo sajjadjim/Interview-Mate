@@ -22,7 +22,7 @@ export default function CandidatePaymentPage() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         // Replace with your real role check logic
-        setIsAuthorized(true); 
+        setIsAuthorized(true);
         setCheckingAuth(false);
         fetchApplications(1, filter);
       } else {
@@ -146,7 +146,7 @@ export default function CandidatePaymentPage() {
                     <th className="px-6 py-4">Session Details</th>
                     <th className="px-6 py-4 text-center">Payment</th>
                     <th className="px-6 py-4 text-center">Approval</th>
-                    <th className="px-6 py-4 text-center">Action</th> 
+                    <th className="px-6 py-4 text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -164,9 +164,8 @@ export default function CandidatePaymentPage() {
                         <td className="px-6 py-4 text-center">
                           <button
                             onClick={() => handleUpdateStatus(app._id, "paymentStatus", app.paymentStatus)}
-                            className={`px-3 py-1 rounded-full text-xs font-bold border transition ${
-                              app.paymentStatus === "paid" ? "bg-green-100 text-green-700 border-green-200" : "bg-red-100 text-red-700 border-red-200"
-                            }`}
+                            className={`px-3 py-1 rounded-full text-xs font-bold border transition ${app.paymentStatus === "paid" ? "bg-green-100 text-green-700 border-green-200" : "bg-red-100 text-red-700 border-red-200"
+                              }`}
                           >
                             {app.paymentStatus ? app.paymentStatus.toUpperCase() : "UNKNOWN"}
                           </button>
@@ -174,14 +173,13 @@ export default function CandidatePaymentPage() {
                         <td className="px-6 py-4 text-center">
                           <button
                             onClick={() => handleUpdateStatus(app._id, "approvalStatus", app.approvalStatus)}
-                            className={`px-3 py-1 rounded-full text-xs font-bold border transition ${
-                              app.approvalStatus === "Approved" ? "bg-blue-100 text-blue-700 border-blue-200" : "bg-yellow-100 text-yellow-700 border-yellow-200"
-                            }`}
+                            className={`px-3 py-1 rounded-full text-xs font-bold border transition ${app.approvalStatus === "Approved" ? "bg-blue-100 text-blue-700 border-blue-200" : "bg-yellow-100 text-yellow-700 border-yellow-200"
+                              }`}
                           >
                             {app.approvalStatus || "Pending"}
                           </button>
                         </td>
-                        
+
                         {/* DELETE BUTTON COLUMN */}
                         <td className="px-6 py-4 text-center">
                           {app.paymentStatus === "unpaid" ? (
@@ -212,7 +210,7 @@ export default function CandidatePaymentPage() {
                 </button>
                 <span className="text-sm text-gray-600">Page {page} of {totalPages}</span>
                 <button onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages} className="flex items-center gap-1 px-4 py-2 border rounded-md bg-white disabled:opacity-50">
-                   Next <ChevronRight size={16} />
+                  Next <ChevronRight size={16} />
                 </button>
               </div>
             )}

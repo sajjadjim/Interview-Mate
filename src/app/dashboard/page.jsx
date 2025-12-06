@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import RequireAuth from "../components/RequireAuth";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
-import { useRouter } from "next/navigation";  // Make sure router is imported
+import { useRouter } from "next/navigation"; 
 
 import {
   Briefcase,
@@ -17,7 +17,7 @@ import {
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
-  const router = useRouter(); // Initialize router
+  const router = useRouter();
 
   const [dbUser, setDbUser] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -31,7 +31,7 @@ export default function DashboardPage() {
   const [latestJobs, setLatestJobs] = useState([]);
   const [applicationsPerJob, setApplicationsPerJob] = useState({});
 
-  // Admin stats (to show on the admin dashboard)
+  // Admin stats
   const [adminStatsLoading, setAdminStatsLoading] = useState(false);
   const [adminStatsError, setAdminStatsError] = useState("");
   const [totalUsers, setTotalUsers] = useState(0);
@@ -42,7 +42,7 @@ export default function DashboardPage() {
     document.title = "Dashboard";
   }, []);
 
-  // 1) Load Mongo user profile (role, companyProfile, etc.)
+  // 1) Load Mongo user profile
   useEffect(() => {
     const loadProfile = async () => {
       if (authLoading) return;
@@ -85,7 +85,7 @@ export default function DashboardPage() {
   const role = dbUser?.role;
   const companyName = dbUser?.companyProfile?.companyName || null;
 
-  // 2) For company role → load job stats using company candidate-applications API
+  // 2) For company role → load job stats
   useEffect(() => {
     const loadCompanyStats = async () => {
       if (!user || !dbUser || role !== "company") return;
@@ -99,7 +99,7 @@ export default function DashboardPage() {
 
         const params = new URLSearchParams();
         params.set("page", "1");
-        params.set("limit", "5"); // only need a few latest jobs for dashboard
+        params.set("limit", "5"); 
         if (companyEmail) {
           params.set("email", companyEmail);
         }
@@ -139,7 +139,7 @@ export default function DashboardPage() {
     }
   }, [authLoading, profileLoading, role, user, dbUser]);
 
-  // 3) Admin Stats: Total Users, Inactive Users, and Candidate Applications
+  // 3) Admin Stats
   useEffect(() => {
     const loadAdminStats = async () => {
       if (!user || role !== "admin") return;
@@ -179,7 +179,6 @@ export default function DashboardPage() {
     }
   }, [authLoading, profileLoading, role, user]);
 
-  // Handle loading state for both admin and company stats
   if (authLoading || profileLoading || (role === "company" && companyStatsLoading) || (role === "admin" && adminStatsLoading)) {
     return (
       <RequireAuth>
@@ -234,7 +233,6 @@ export default function DashboardPage() {
           <section className="space-y-5">
             <h2 className="text-lg font-semibold text-gray-900">Admin Overview</h2>
 
-            {/* Admin Actions */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-xl bg-white border border-gray-200 p-4 flex items-center gap-3">
                 <button
@@ -267,7 +265,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Admin Stats */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-xl bg-white border border-gray-200 p-4 flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
@@ -336,8 +333,8 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Latest jobs table */}
-            {!companyStatsLoading && latestJobsSafe.length > 0 && (
+            {/* Latest jobs table - CHANGED latestJobsSafe to latestJobs */}
+            {!companyStatsLoading && latestJobs.length > 0 && (
               <div className="mt-2">
                 <h3 className="text-sm font-semibold text-gray-800 mb-2">
                   Latest jobs you posted
@@ -361,7 +358,8 @@ export default function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {latestJobsSafe.map((job, index) => {
+                      {/* CHANGED latestJobsSafe to latestJobs */}
+                      {latestJobs.map((job, index) => {
                         const appsCount =
                           applicationsPerJob[job._id] ?? 0;
                         return (
@@ -431,7 +429,8 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {!companyStatsLoading && latestJobsSafe.length === 0 && (
+            {/* CHANGED latestJobsSafe to latestJobs */}
+            {!companyStatsLoading && latestJobs.length === 0 && (
               <p className="text-xs text-gray-500 bg-white border border-dashed border-gray-200 rounded-lg px-3 py-3">
                 You haven&apos;t posted any jobs yet. Once you post jobs, this
                 section will show how many you have posted and their

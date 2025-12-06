@@ -86,13 +86,13 @@ export default function Footer() {
       </div>
 
       {/* Floating chat bubble (optional) */}
-      <Link
+      {/* <Link
         href="#"
         className="fixed bottom-4 right-4 md:bottom-6 md:right-6 inline-flex items-center justify-center w-11 h-11 rounded-full bg-white text-black shadow-lg hover:scale-105 transition"
         aria-label="Chat"
       >
         <MessageSquare size={20} />
-      </Link>
+      </Link> */}
     </footer>
   );
 }

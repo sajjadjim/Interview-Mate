@@ -6,9 +6,9 @@ import { getAuth, onAuthStateChanged } from "firebase/auth";
 import app from "@/lib/firebase";
 import Swal from "sweetalert2";
 import { Dialog } from "@headlessui/react";
-import { 
-  XCircle, ChevronLeft, ChevronRight, Building2, 
-  UserCheck, CheckCircle2, Clock, BarChart3 
+import {
+  XCircle, ChevronLeft, ChevronRight, Building2,
+  UserCheck, CheckCircle2, Clock, BarChart3
 } from "lucide-react";
 
 export default function PendingCompanyPage() {
@@ -20,7 +20,7 @@ export default function PendingCompanyPage() {
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 }); // New Stats State
   const [statusFilter, setStatusFilter] = useState("inactive");
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Pagination State
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -50,11 +50,11 @@ export default function PendingCompanyPage() {
     try {
       const res = await fetch(`/api/admin/pending-company?status=${currentStatus}&page=${pageNum}`);
       const data = await res.json();
-      
+
       setCompanies(data.companies || []);
       setTotalPages(data.totalPages || 1);
       setPage(data.currentPage || 1);
-      
+
       // Update Stats from API response
       if (data.stats) {
         setStats(data.stats);
@@ -69,7 +69,7 @@ export default function PendingCompanyPage() {
 
   const handleStatusChange = async (userId, newStatus) => {
     const action = newStatus === "active" ? "Activate" : "Deactivate";
-    
+
     Swal.fire({
       title: `Are you sure?`,
       text: `Do you want to ${action} this Company?`,
@@ -138,7 +138,7 @@ export default function PendingCompanyPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-      
+
       {/* HEADER & TITLE */}
       <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
         <Building2 className="w-8 h-8 text-blue-600" />
@@ -185,21 +185,19 @@ export default function PendingCompanyPage() {
       <div className="flex gap-4 border-b pb-2">
         <button
           onClick={() => handleFilterClick("inactive")}
-          className={`px-6 py-2 rounded-t-lg font-semibold transition ${
-            statusFilter === "inactive" 
-              ? "bg-red-500 text-white shadow-md" 
+          className={`px-6 py-2 rounded-t-lg font-semibold transition ${statusFilter === "inactive"
+              ? "bg-red-500 text-white shadow-md"
               : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          }`}
+            }`}
         >
           Inactive Requests
         </button>
         <button
           onClick={() => handleFilterClick("active")}
-          className={`px-6 py-2 rounded-t-lg font-semibold transition ${
-            statusFilter === "active" 
-              ? "bg-green-600 text-white shadow-md" 
+          className={`px-6 py-2 rounded-t-lg font-semibold transition ${statusFilter === "active"
+              ? "bg-green-600 text-white shadow-md"
               : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          }`}
+            }`}
         >
           Active Companies
         </button>
@@ -242,9 +240,8 @@ export default function PendingCompanyPage() {
                           <div className="text-xs text-blue-500">{co.companyProfile?.ownerEmail}</div>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            co.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                          }`}>
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${co.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                            }`}>
                             {co.status.toUpperCase()}
                           </span>
                         </td>
@@ -257,9 +254,8 @@ export default function PendingCompanyPage() {
                           </button>
                           <button
                             onClick={() => handleStatusChange(co._id, co.status === "active" ? "inactive" : "active")}
-                            className={`font-medium hover:underline ${
-                              co.status === "active" ? "text-red-600 hover:text-red-800" : "text-green-600 hover:text-green-800"
-                            }`}
+                            className={`font-medium hover:underline ${co.status === "active" ? "text-red-600 hover:text-red-800" : "text-green-600 hover:text-green-800"
+                              }`}
                           >
                             {co.status === "active" ? "Deactivate" : "Approve"}
                           </button>
@@ -313,24 +309,24 @@ export default function PendingCompanyPage() {
                 <div className="col-span-1 md:col-span-2 text-sm font-semibold text-gray-500 border-b pb-1 mb-2">Company Info</div>
                 <div>
                   <label className="text-sm font-medium text-gray-700">Name</label>
-                  <input type="text" value={editData.companyProfile?.companyName || ""} onChange={(e) => setEditData({...editData, companyProfile: {...editData.companyProfile, companyName: e.target.value}})} className="w-full mt-1 p-2 border rounded-md" />
+                  <input type="text" value={editData.companyProfile?.companyName || ""} onChange={(e) => setEditData({ ...editData, companyProfile: { ...editData.companyProfile, companyName: e.target.value } })} className="w-full mt-1 p-2 border rounded-md" />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700">Address</label>
-                  <input type="text" value={editData.companyProfile?.companyAddress || ""} onChange={(e) => setEditData({...editData, companyProfile: {...editData.companyProfile, companyAddress: e.target.value}})} className="w-full mt-1 p-2 border rounded-md" />
+                  <input type="text" value={editData.companyProfile?.companyAddress || ""} onChange={(e) => setEditData({ ...editData, companyProfile: { ...editData.companyProfile, companyAddress: e.target.value } })} className="w-full mt-1 p-2 border rounded-md" />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700">Email</label>
-                  <input type="email" value={editData.companyProfile?.companyEmail || ""} onChange={(e) => setEditData({...editData, companyProfile: {...editData.companyProfile, companyEmail: e.target.value}})} className="w-full mt-1 p-2 border rounded-md" />
+                  <input type="email" value={editData.companyProfile?.companyEmail || ""} onChange={(e) => setEditData({ ...editData, companyProfile: { ...editData.companyProfile, companyEmail: e.target.value } })} className="w-full mt-1 p-2 border rounded-md" />
                 </div>
                 <div className="col-span-1 md:col-span-2 text-sm font-semibold text-gray-500 border-b pb-1 mb-2 mt-4">Owner Info</div>
                 <div>
                   <label className="text-sm font-medium text-gray-700">Owner Name</label>
-                  <input type="text" value={editData.companyProfile?.ownerName || ""} onChange={(e) => setEditData({...editData, companyProfile: {...editData.companyProfile, ownerName: e.target.value}})} className="w-full mt-1 p-2 border rounded-md" />
+                  <input type="text" value={editData.companyProfile?.ownerName || ""} onChange={(e) => setEditData({ ...editData, companyProfile: { ...editData.companyProfile, ownerName: e.target.value } })} className="w-full mt-1 p-2 border rounded-md" />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700">Owner Phone</label>
-                  <input type="text" value={editData.companyProfile?.ownerPhone || ""} onChange={(e) => setEditData({...editData, companyProfile: {...editData.companyProfile, ownerPhone: e.target.value}})} className="w-full mt-1 p-2 border rounded-md" />
+                  <input type="text" value={editData.companyProfile?.ownerPhone || ""} onChange={(e) => setEditData({ ...editData, companyProfile: { ...editData.companyProfile, ownerPhone: e.target.value } })} className="w-full mt-1 p-2 border rounded-md" />
                 </div>
               </div>
             )}

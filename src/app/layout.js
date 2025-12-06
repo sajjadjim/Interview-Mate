@@ -1,6 +1,7 @@
 import { AuthProvider } from "@/context/AuthContext";
 import Footer from "./components/Footer";
 import Navbar from "./components/Navbar";
+import SupportChat from "./components/SupportChat"; // <--- 1. Import the component
 import "./globals.css";
 
 export const metadata = {
@@ -14,7 +15,11 @@ export default function RootLayout({ children }) {
       <body className="min-h-screen flex flex-col">
         <AuthProvider>
           <Navbar />
-          <main className="flex-1">{children}</main>
+          
+          <main className="flex-1">
+            {children}
+          </main>
+          <SupportChat />       
           <Footer />
         </AuthProvider>
       </body>

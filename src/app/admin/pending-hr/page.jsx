@@ -6,9 +6,9 @@ import { getAuth, onAuthStateChanged } from "firebase/auth";
 import app from "@/lib/firebase";
 import Swal from "sweetalert2";
 import { Dialog } from "@headlessui/react";
-import { 
-  XCircle, ChevronLeft, ChevronRight, Users, 
-  UserCheck, UserX, Briefcase 
+import {
+  XCircle, ChevronLeft, ChevronRight, Users,
+  UserCheck, UserX, Briefcase
 } from "lucide-react";
 
 export default function PendingHRPage() {
@@ -50,7 +50,7 @@ export default function PendingHRPage() {
     try {
       const res = await fetch(`/api/admin/pending-hr?status=${currentStatus}&page=${pageNum}`);
       const data = await res.json();
-      
+
       setHrData(data.hrUsers || []);
       setTotalPages(data.totalPages || 1);
       setPage(data.currentPage || 1);
@@ -69,7 +69,7 @@ export default function PendingHRPage() {
 
   const handleStatusChange = async (userId, newStatus) => {
     const action = newStatus === "active" ? "Activate" : "Deactivate";
-    
+
     Swal.fire({
       title: `Are you sure?`,
       text: `Do you want to ${action} this HR?`,
@@ -138,7 +138,7 @@ export default function PendingHRPage() {
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto px-4 py-8">
-      
+
       {/* HEADER */}
       <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
         <Briefcase className="w-8 h-8 text-blue-600" />
@@ -185,21 +185,19 @@ export default function PendingHRPage() {
       <div className="flex gap-4 border-b pb-2">
         <button
           onClick={() => handleFilterClick("inactive")}
-          className={`px-6 py-2 rounded-t-lg font-semibold transition ${
-            statusFilter === "inactive" 
-              ? "bg-red-500 text-white shadow-md" 
+          className={`px-6 py-2 rounded-t-lg font-semibold transition ${statusFilter === "inactive"
+              ? "bg-red-500 text-white shadow-md"
               : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          }`}
+            }`}
         >
           Inactive Requests
         </button>
         <button
           onClick={() => handleFilterClick("active")}
-          className={`px-6 py-2 rounded-t-lg font-semibold transition ${
-            statusFilter === "active" 
-              ? "bg-green-600 text-white shadow-md" 
+          className={`px-6 py-2 rounded-t-lg font-semibold transition ${statusFilter === "active"
+              ? "bg-green-600 text-white shadow-md"
               : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          }`}
+            }`}
         >
           Active HRs
         </button>
@@ -234,9 +232,8 @@ export default function PendingHRPage() {
                         <td className="px-6 py-4 text-gray-600">{hr.hrProfile?.companyName || "N/A"}</td>
                         <td className="px-6 py-4 text-center">
                           <span
-                            className={`px-3 py-1 rounded-full text-xs font-bold ${
-                              hr.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                            }`}
+                            className={`px-3 py-1 rounded-full text-xs font-bold ${hr.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                              }`}
                           >
                             {hr.status.toUpperCase()}
                           </span>
@@ -250,9 +247,8 @@ export default function PendingHRPage() {
                           </button>
                           <button
                             onClick={() => handleStatusChange(hr._id, hr.status === "active" ? "inactive" : "active")}
-                            className={`font-medium hover:underline ${
-                              hr.status === "active" ? "text-red-600 hover:text-red-800" : "text-green-600 hover:text-green-800"
-                            }`}
+                            className={`font-medium hover:underline ${hr.status === "active" ? "text-red-600 hover:text-red-800" : "text-green-600 hover:text-green-800"
+                              }`}
                           >
                             {hr.status === "active" ? "Deactivate" : "Approve"}
                           </button>
@@ -303,9 +299,9 @@ export default function PendingHRPage() {
               <XCircle size={24} />
             </button>
             <Dialog.Title className="text-xl font-bold mb-6 text-gray-800 flex items-center gap-2">
-               Edit HR Profile
+              Edit HR Profile
             </Dialog.Title>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Full Name</label>
