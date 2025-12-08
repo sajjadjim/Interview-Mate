@@ -10,6 +10,7 @@ import {
   Video,
   Info,
   Mail,
+  Keyboard,
   LogIn,
   UserPlus,
   Menu,
@@ -31,7 +32,8 @@ const navItems = [
   { label: "Home", href: "/", Icon: Home },
   { label: "Jobs", href: "/jobs", Icon: Briefcase },
   { label: "Interviews", href: "/interviews", Icon: Video },
-  { label: "Apply Interview", href: "/apply", Icon: Airplay },
+  { label: "Interview Apply", href: "/apply", Icon: Airplay },
+  { label: "Leaderboard", href: "/leaderboard", Icon: Keyboard },
   { label: "About", href: "/about", Icon: Info },
   // { label: "Contact", href: "/contact", Icon: Mail },
 ];

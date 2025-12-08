@@ -1,329 +1,412 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { Video, PhoneCall, PhoneOff, Clock, AlertTriangle } from "lucide-react";
+import { useEffect, useRef, useState, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation"; 
+import { 
+  Video, PhoneCall, PhoneOff, Clock, AlertTriangle, 
+  FileText, Search, User, X, Send, 
+  BookOpen, BrainCircuit, Globe, GripHorizontal, ChevronDown, ChevronUp,
+  Info, ShieldAlert
+} from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 // ---- ZEGOCLOUD env config ----
 const ZEGO_APP_ID = Number(process.env.NEXT_PUBLIC_ZEGO_APP_ID || 0);
-const ZEGO_SERVER_SECRET =
-  process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET || ""; // for dev/test only
+const ZEGO_SERVER_SECRET = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET || "";
 
-// ---- helpers ----
-function sanitizeRoomId(name) {
-  if (!name) return "InterviewMateRoom";
-  const cleaned = name.replace(/[^a-zA-Z0-9_-]/g, "");
-  return cleaned || "InterviewMateRoom";
-}
+// ---- STATIC DATA: QUESTION BANK ----
+const QUESTION_BANK = {
+  "IT & Engineering": [
+    { q: "What is the difference between REST and GraphQL?", a: "REST uses standard HTTP methods. GraphQL allows clients to request specific data structure." },
+    { q: "Explain 'Hoisting' in JavaScript.", a: "Variable and function declarations are moved to the top of their scope." },
+    { q: "Difference between TCP and UDP?", a: "TCP is reliable/connected. UDP is faster/connectionless but less reliable." },
+  ],
+  "Business & Commercial": [
+    { q: "How do you handle a dissatisfied client?", a: "Listen, acknowledge, apologize, and propose a solution." },
+    { q: "Marketing vs Branding?", a: "Marketing is tactical promotion. Branding is the strategic identity." },
+  ],
+  "Education": [
+    { q: "Handling disruptive students?", a: "Non-verbal cues first, then private talk. No public shaming." },
+    { q: "Teaching philosophy?", a: "Student-centered, adaptable, critical thinking focus." },
+  ],
+  "General Knowledge": [
+    { q: "Capital of Bangladesh?", a: "Dhaka." },
+    { q: "Founder of Microsoft?", a: "Bill Gates." },
+  ],
+  "HR / Soft Skills": [
+    { q: "Describe a time you failed.", a: "Look for ownership, lack of blame, and lessons learned." },
+    { q: "Where do you see yourself in 5 years?", a: "Look for ambition aligned with company growth." },
+  ]
+};
 
-function formatTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
+// ---- DRAGGABLE WINDOW COMPONENT ----
+const DraggableWindow = ({ title, icon: Icon, onClose, children, initialPos = { x: 20, y: 100 } }) => {
+  const [pos, setPos] = useState(initialPos);
+  const [dragging, setDragging] = useState(false);
+  const [rel, setRel] = useState(null);
 
-export default function CallingPage({ searchParams }) {
-  // Optional: you can open /calling?roomId=xxx&name=yyy
-  const initialRoomId = searchParams?.roomId || "InterviewMate_12345";
-  const initialDisplayName = searchParams?.name || "HR";
+  const onMouseDown = (e) => {
+    if (e.button !== 0) return;
+    setDragging(true);
+    setRel({ x: e.pageX - pos.x, y: e.pageY - pos.y });
+    e.stopPropagation();
+    e.preventDefault();
+  };
+
+  const onMouseMove = useCallback((e) => {
+    if (!dragging) return;
+    setPos({ x: e.pageX - rel.x, y: e.pageY - rel.y });
+    e.stopPropagation();
+    e.preventDefault();
+  }, [dragging, rel]);
+
+  const onMouseUp = () => {
+    setDragging(false);
+  };
+
+  useEffect(() => {
+    if (dragging) {
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    } else {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    }
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [dragging, onMouseMove]);
+
+  return (
+    <div 
+      className="fixed z-50 w-80 md:w-96 bg-white/95 backdrop-blur-md rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col"
+      style={{ left: pos.x, top: pos.y }}
+    >
+      <div 
+        onMouseDown={onMouseDown}
+        className="bg-slate-100 border-b border-slate-200 p-3 flex justify-between items-center cursor-move select-none"
+      >
+        <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+          <GripHorizontal size={16} className="text-slate-400" />
+          {Icon && <Icon size={16} className="text-blue-600" />}
+          {title}
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition-colors">
+          <X size={18} />
+        </button>
+      </div>
+      <div className="p-4 overflow-y-auto max-h-[60vh]">
+        {children}
+      </div>
+    </div>
+  );
+};
+
+// ---- MAIN LOGIC COMPONENT (Renamed from CallingPage) ----
+function CallingContent() {
+  const { user } = useAuth();
+  const searchParamsHook = useSearchParams();
+  const [userRole, setUserRole] = useState(null);
+  
+  // Zego State
+  const initialRoomId = searchParamsHook.get("roomId") || "692dc62f0d3daff50293457b"; 
+  const initialDisplayName = searchParamsHook.get("name") || "User";
 
   const [roomId, setRoomId] = useState(initialRoomId);
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [joined, setJoined] = useState(false);
   const [callEnded, setCallEnded] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(30 * 60); // 30 minutes
-
+  const [timeLeft, setTimeLeft] = useState(30 * 60);
   const containerRef = useRef(null);
   const zegoInstanceRef = useRef(null);
-
-  const cleanedRoomId = sanitizeRoomId(roomId);
   const hasZegoConfig = ZEGO_APP_ID && ZEGO_SERVER_SECRET;
 
-  // 30-minute timer
+  // Tools State
+  const [activeTools, setActiveTools] = useState({
+    search: false,
+    ai: false,
+    questions: false,
+    feedback: false
+  });
+
+  const [showRules, setShowRules] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // AI State
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiResponse, setAiResponse] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  // Question Bank State
+  const [selectedTopic, setSelectedTopic] = useState("IT & Engineering");
+  const [openQuestionId, setOpenQuestionId] = useState(null);
+
+  // Feedback State
+  const [candidateData, setCandidateData] = useState(null);
+  const [feedbackStep, setFeedbackStep] = useState(1);
+  const [fetchLoading, setFetchLoading] = useState(false);
+  const [questions, setQuestions] = useState([
+    { id: 1, text: "Technical Knowledge", score: 2 },
+    { id: 2, text: "Communication Skills", score: 2 },
+    { id: 3, text: "Problem Solving", score: 2 },
+    { id: 4, text: "Adaptability", score: 2 },
+    { id: 5, text: "Confidence", score: 2 },
+    { id: 6, text: "Professionalism", score: 2 },
+  ]);
+
+  // Auth & Role
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      if (!user) return;
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/users/me", { headers: { Authorization: `Bearer ${token}` } });
+        const data = await res.json();
+        if (data.role) {
+            setUserRole(data.role);
+            if (data.role === 'hr') setShowRules(false);
+        }
+      } catch (e) { console.error(e); }
+    };
+    fetchUserRole();
+  }, [user]);
+
+  // Timer
   useEffect(() => {
     if (!joined || callEnded) return;
-
     const id = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(id);
           setCallEnded(true);
-
-          if (zegoInstanceRef.current) {
-            try {
-              zegoInstanceRef.current.hangUp?.();
-              zegoInstanceRef.current.destroy();
-            } catch (e) {
-              console.error("Error ending Zego call:", e);
-            } finally {
-              zegoInstanceRef.current = null;
-            }
-          }
-
+          if (zegoInstanceRef.current) zegoInstanceRef.current.destroy();
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(id);
   }, [joined, callEnded]);
 
-  // Create & join ZEGOCLOUD room
-  const joinZegoRoom = useCallback(async () => {
-    if (!containerRef.current) {
-      console.error("No containerRef for ZEGOCLOUD");
-      return;
-    }
-    if (!hasZegoConfig) {
-      console.error("Missing ZEGO_APP_ID or ZEGO_SERVER_SECRET");
-      return;
-    }
-    if (zegoInstanceRef.current) {
-      // already joined
-      return;
-    }
+  // Zego Join
+  const handleJoin = async () => {
+    if (!containerRef.current || !hasZegoConfig) return;
+    setJoined(true); setCallEnded(false);
+    
+    const { ZegoUIKitPrebuilt } = await import("@zegocloud/zego-uikit-prebuilt");
+    const userID = `${Date.now()}`;
+    const safeRoomId = roomId.replace(/[^a-zA-Z0-9_-]/g, "") || "InterviewRoom";
 
-    // 🔥 IMPORTANT: dynamic import so it only runs in the browser
-    const { ZegoUIKitPrebuilt } = await import(
-      "@zegocloud/zego-uikit-prebuilt"
-    );
-
-    const userID = `${Date.now()}_${Math.floor(Math.random() * 1000)}`; // You can replace with Firebase uid
-    const userName = displayName || "Interview User";
-    const roomID = cleanedRoomId;
-
-    // For dev/demo only. For production, generate this token in a backend.
     const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-      ZEGO_APP_ID,
-      ZEGO_SERVER_SECRET,
-      roomID,
-      userID,
-      userName,
-      30 * 60 // token TTL in seconds
+      ZEGO_APP_ID, ZEGO_SERVER_SECRET, safeRoomId, userID, displayName, 1800
     );
-
     const zp = ZegoUIKitPrebuilt.create(kitToken);
     zegoInstanceRef.current = zp;
 
     zp.joinRoom({
       container: containerRef.current,
       maxUsers: 2,
-      showPreJoinView: true,
+      turnOnCameraWhenJoining: true,
+      turnOnMicrophoneWhenJoining: true,
+      showPreJoinView: false, 
+      showMyCameraToggleButton: userRole === 'hr', 
+      showMyMicrophoneToggleButton: userRole === 'hr', 
+      showAudioVideoSettingsButton: true,
       showRoomTimer: true,
-      showLeaveRoomConfirmDialog: true,
-      scenario: {
-        mode: ZegoUIKitPrebuilt.OneONoneCall,
-        config: {
-          role: ZegoUIKitPrebuilt.Host,
-        },
+      scenario: { 
+        mode: ZegoUIKitPrebuilt.OneONoneCall, 
+        config: { role: ZegoUIKitPrebuilt.Host } 
       },
-      onJoinRoom: () => {
-        console.log("Joined ZEGOCLOUD room:", roomID);
-      },
-      onLeaveRoom: () => {
-        setJoined(false);
-        setCallEnded(false);
-        setTimeLeft(30 * 60);
-        if (zegoInstanceRef.current) {
-          try {
-            zegoInstanceRef.current.destroy();
-          } catch (e) {
-            console.error("Error destroying Zego instance:", e);
-          } finally {
-            zegoInstanceRef.current = null;
-          }
-        }
-      },
+      onLeaveRoom: () => { setJoined(false); setCallEnded(false); setTimeLeft(1800); }
     });
-  }, [cleanedRoomId, displayName, hasZegoConfig]);
-
-  const handleJoin = async () => {
-    setJoined(true);
-    setCallEnded(false);
-    setTimeLeft(30 * 60);
-    await joinZegoRoom();
   };
 
   const handleLeave = () => {
-    setJoined(false);
-    setCallEnded(false);
-    setTimeLeft(30 * 60);
-    if (zegoInstanceRef.current) {
-      try {
-        zegoInstanceRef.current.hangUp?.();
-        zegoInstanceRef.current.destroy();
-      } catch (e) {
-        console.error("Error leaving Zego room:", e);
-      } finally {
-        zegoInstanceRef.current = null;
-      }
+    setJoined(false); setCallEnded(false); setTimeLeft(1800);
+    if (zegoInstanceRef.current) zegoInstanceRef.current.destroy();
+  };
+
+  const toggleTool = (tool) => {
+    setActiveTools(prev => ({ ...prev, [tool]: !prev[tool] }));
+  };
+
+  const handleGoogleSearch = (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    const width = 600; 
+    const height = 800;
+    const left = window.screen.width - width;
+    window.open(
+      `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`, 
+      'GoogleSearch', 
+      `width=${width},height=${height},left=${left},top=0`
+    );
+  };
+
+  const handleAskAi = async () => {
+    if(!aiPrompt.trim()) return;
+    setAiLoading(true);
+    try {
+      const res = await fetch("/api/ai-assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: aiPrompt }),
+      });
+      const data = await res.json();
+      setAiResponse(data.data || { q: "Error", a: "Could not fetch." });
+    } catch {
+      setAiResponse({ q: "Error", a: "Network error." });
+    } finally {
+      setAiLoading(false);
     }
   };
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (zegoInstanceRef.current) {
-        try {
-          zegoInstanceRef.current.destroy();
-        } catch (e) {
-          console.error("Error destroying Zego on unmount:", e);
-        } finally {
-          zegoInstanceRef.current = null;
-        }
+  const handleFetchCandidate = async () => {
+    if(!roomId) return;
+    setFetchLoading(true);
+    try {
+      const res = await fetch('/api/interview/fetch-candidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: roomId.trim() }) 
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCandidateData(data.data);
+        setFeedbackStep(2);
+      } else {
+        alert("Candidate not found!");
       }
-    };
-  }, []);
+    } finally {
+      setFetchLoading(false);
+    }
+  };
 
   return (
-    <main className="min-h-screen bg-slate-50 flex flex-col items-center py-8 px-4">
-      <div className="w-full max-w-4xl space-y-4">
-        {/* Header */}
-        <header className="flex flex-col gap-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-500">
-            Live call • ZEGOCLOUD
-          </p>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900">
-            Interview call room (HR ↔ Candidate)
-          </h1>
-          <p className="text-sm text-slate-600 max-w-xl">
-            1-to-1 interview room powered by ZEGOCLOUD. Share the same Room ID
-            with the candidate or HR and both join this page.
-          </p>
-        </header>
+    <main className="min-h-screen bg-slate-50 flex flex-col items-center py-4 px-4 relative overflow-hidden">
+      
+      {/* HEADER */}
+      <div className="w-full max-w-6xl flex flex-col md:flex-row justify-between items-center gap-4 mb-4 z-10">
+        <div className="flex items-center gap-4">
+           <div>
+              <h1 className="text-xl font-bold text-slate-900">Live Interview Room</h1>
+              <p className="text-xs text-slate-500 flex items-center gap-1"><Clock size={12}/> Time Left: {String(Math.floor(timeLeft / 60)).padStart(2, '0')}:{String(timeLeft % 60).padStart(2, '0')}</p>
+           </div>
+           
+           {userRole !== 'hr' && (
+             <button onClick={() => setShowRules(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full text-xs font-bold transition-colors">
+               <Info size={14} /> Rules
+             </button>
+           )}
+        </div>
 
-        {/* Config warning */}
-        {!hasZegoConfig && (
-          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg px-3 py-2">
-            <AlertTriangle size={16} className="mt-0.5" />
-            <p>
-              <span className="font-semibold">ZEGOCLOUD not configured.</span>{" "}
-              Set <code>NEXT_PUBLIC_ZEGO_APP_ID</code> and{" "}
-              <code>NEXT_PUBLIC_ZEGO_SERVER_SECRET</code> in{" "}
-              <code>.env.local</code> and restart <code>npm run dev</code>.
-            </p>
+        {userRole === 'hr' && (
+          <div className="flex flex-wrap gap-2 bg-white p-2 rounded-xl shadow-sm border border-slate-200">
+            <button onClick={() => toggleTool('search')} className={`p-2 rounded-lg transition-all ${activeTools.search ? 'bg-blue-100 text-blue-600' : 'text-slate-600 hover:bg-slate-50'}`} title="Google Search"><Globe size={20} /></button>
+            <button onClick={() => toggleTool('ai')} className={`p-2 rounded-lg transition-all ${activeTools.ai ? 'bg-violet-100 text-violet-600' : 'text-slate-600 hover:bg-slate-50'}`} title="Ask AI"><BrainCircuit size={20} /></button>
+            <button onClick={() => toggleTool('questions')} className={`p-2 rounded-lg transition-all ${activeTools.questions ? 'bg-emerald-100 text-emerald-600' : 'text-slate-600 hover:bg-slate-50'}`} title="Question Bank"><BookOpen size={20} /></button>
+            <div className="w-px bg-slate-200 mx-1"></div>
+            <button onClick={() => toggleTool('feedback')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${activeTools.feedback ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}><FileText size={16} /> Marking</button>
           </div>
         )}
-
-        {/* Controls */}
-        <section className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-col gap-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Room ID */}
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-slate-700">
-                Room ID (letters / numbers / - / _)
-              </label>
-              <input
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60"
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value)}
-                disabled={joined}
-              />
-              <p className="text-[11px] text-slate-500">
-                Share this Room ID with the other side (HR or candidate). Both
-                must use the same Room ID.
-              </p>
-            </div>
-
-            {/* Display name */}
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-slate-700">
-                Your display name
-              </label>
-              <input
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                disabled={joined}
-                placeholder="e.g. HR Sajjad / Candidate Jim"
-              />
-              <p className="text-[11px] text-slate-500">
-                This name will be shown inside the ZEGOCLOUD call UI.
-              </p>
-            </div>
-          </div>
-
-          {/* Timer + buttons */}
-          <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between pt-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 bg-slate-50">
-              <Clock size={14} className="text-blue-600" />
-              <span className="font-mono text-xs">
-                Time left: {joined ? formatTime(timeLeft) : "00:00"}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {!joined ? (
-                <button
-                  onClick={handleJoin}
-                  disabled={!hasZegoConfig}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <PhoneCall size={16} />
-                  Join call
-                </button>
-              ) : (
-                <button
-                  onClick={handleLeave}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-red-600 text-white text-sm font-semibold hover:bg-red-700"
-                >
-                  <PhoneOff size={16} />
-                  Leave call
-                </button>
-              )}
-              <p className="text-[11px] text-slate-500 max-w-xs">
-                One session is limited to 30 minutes in this UI. After that, the
-                call auto-ends.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* Video area */}
-        <section className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
-          <p className="text-xs font-semibold text-slate-800 mb-2 flex items-center gap-2">
-            <Video size={16} className="text-blue-600" />
-            Live video
-          </p>
-
-          <div className="relative w-full rounded-xl overflow-hidden bg-slate-900/90">
-            {/* ZEGOCLOUD injects the UI into this div */}
-            <div
-              ref={containerRef}
-              className="w-full h-[70vh] flex items-center justify-center"
-            />
-
-            {(!joined || callEnded) && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-slate-200 px-4 pointer-events-none">
-                {!joined && !callEnded && (
-                  <>
-                    <Video size={28} className="mb-2 text-slate-400" />
-                    <p className="text-sm font-medium">
-                      Click &quot;Join call&quot; to start the interview
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-1 max-w-sm">
-                      HR and candidate open this page, use the same Room ID and
-                      join. ZEGOCLOUD will render the 1-to-1 call UI here.
-                    </p>
-                  </>
-                )}
-                {callEnded && (
-                  <>
-                    <Clock size={28} className="mb-2 text-amber-400" />
-                    <p className="text-sm font-medium">
-                      30-minute interview session finished
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-1 max-w-sm">
-                      The timer reached 30 minutes and we ended the call. You
-                      can start a new session with the same or a new Room ID.
-                    </p>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </section>
       </div>
+
+      {/* WARNING BANNER (Hidden for HR) */}
+      {userRole !== 'hr' && (
+        <div className="w-full max-w-6xl mb-4 animate-in fade-in slide-in-from-top-2">
+          <div className="bg-red-50 border border-red-100 text-red-800 text-xs px-4 py-2 rounded-lg flex items-center justify-between shadow-sm">
+             <div className="flex items-center gap-2">
+               <ShieldAlert size={16} className="text-red-600" />
+               <span className="font-semibold">STRICT ENFORCEMENT:</span> Background MUST be a single solid color. Camera must remain ON at all times.
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MAIN VIDEO LAYOUT */}
+      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-4 gap-4 h-[calc(100vh-140px)]">
+         <div className="lg:col-span-3 bg-black rounded-2xl overflow-hidden relative shadow-2xl border border-slate-900">
+            <div ref={containerRef} className="w-full h-full" />
+            {!joined && !callEnded && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+                    <Video size={48} className="mb-4 opacity-50" />
+                    <p className="text-lg font-medium text-slate-300">Ready to join?</p>
+                </div>
+            )}
+         </div>
+
+         <div className="lg:col-span-1 flex flex-col gap-4">
+             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                <div className="space-y-3">
+                   <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase">Room ID</label>
+                      <input value={roomId} onChange={e => setRoomId(e.target.value)} disabled={joined} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono" />
+                   </div>
+                   <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase">Name</label>
+                      <input value={displayName} onChange={e => setDisplayName(e.target.value)} disabled={joined} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                   </div>
+                   {!joined ? (
+                      <button onClick={handleJoin} disabled={!hasZegoConfig} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg text-sm transition-colors shadow-lg shadow-blue-200">Join Call</button>
+                   ) : (
+                      <button onClick={handleLeave} className="w-full bg-red-100 hover:bg-red-200 text-red-600 font-bold py-2 rounded-lg text-sm transition-colors">End Call</button>
+                   )}
+                </div>
+             </div>
+             {!hasZegoConfig && (
+                <div className="bg-amber-50 text-amber-800 text-xs p-3 rounded-xl border border-amber-200 flex items-start gap-2"><AlertTriangle size={14} className="mt-0.5" /> ZEGOCLOUD env vars missing.</div>
+             )}
+         </div>
+      </div>
+
+      {/* RULES MODAL */}
+      {showRules && userRole !== 'hr' && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in zoom-in duration-300">
+           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+               <div className="bg-red-600 p-6 text-white text-center">
+                   <ShieldAlert size={48} className="mx-auto mb-3 opacity-90" />
+                   <h2 className="text-2xl font-bold">Mandatory Interview Rules</h2>
+                   <p className="text-red-100 text-sm mt-1">Please read carefully before joining.</p>
+               </div>
+               
+               <div className="p-6 space-y-4">
+                   <div className="flex gap-4 items-start">
+                       <div className="h-8 w-8 bg-red-50 text-red-600 rounded-full flex items-center justify-center font-bold flex-shrink-0">1</div>
+                       <div><h4 className="font-bold text-slate-800 text-sm">Solid Background Required</h4><p className="text-xs text-slate-500 mt-1">Your video background <span className="text-red-600 font-bold">must be a single solid color</span> (e.g., White, Blue, or Green wall).</p></div>
+                   </div>
+                   <div className="flex gap-4 items-start">
+                       <div className="h-8 w-8 bg-red-50 text-red-600 rounded-full flex items-center justify-center font-bold flex-shrink-0">2</div>
+                       <div><h4 className="font-bold text-slate-800 text-sm">Camera & Mic Policy</h4><p className="text-xs text-slate-500 mt-1">You must keep your camera and microphone <b>ON</b> at all times.</p></div>
+                   </div>
+                   <div className="flex gap-4 items-start">
+                       <div className="h-8 w-8 bg-red-50 text-red-600 rounded-full flex items-center justify-center font-bold flex-shrink-0">3</div>
+                       <div><h4 className="font-bold text-slate-800 text-sm">Professional Environment</h4><p className="text-xs text-slate-500 mt-1">Ensure you are in a quiet room with good lighting.</p></div>
+                   </div>
+               </div>
+
+               <div className="p-6 bg-slate-50 border-t border-slate-100">
+                   <button onClick={() => setShowRules(false)} className="w-full bg-slate-900 hover:bg-black text-white font-bold py-3.5 rounded-xl transition-all active:scale-95">I Understand & Agree</button>
+               </div>
+           </div>
+        </div>
+      )}
+
+      {/* HR TOOLS */}
+      {activeTools.search && <DraggableWindow title="Google Search" icon={Globe} onClose={() => toggleTool('search')} initialPos={{ x: 50, y: 150 }}><form onSubmit={handleGoogleSearch} className="flex gap-2"><input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search topic..." className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" autoFocus /><button type="submit" className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700"><Search size={18} /></button></form></DraggableWindow>}
+      {activeTools.ai && <DraggableWindow title="Ask AI Assistant" icon={BrainCircuit} onClose={() => toggleTool('ai')} initialPos={{ x: 400, y: 150 }}><div className="flex gap-2 mb-4"><input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="e.g. React Hooks..." className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500" /><button onClick={handleAskAi} disabled={aiLoading} className="bg-violet-600 text-white p-2 rounded-lg hover:bg-violet-700 disabled:opacity-50">{aiLoading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send size={18} />}</button></div>{aiResponse && <div className="bg-violet-50 rounded-lg p-3 text-sm border border-violet-100"><p className="font-bold text-violet-800 mb-1">Q: {aiResponse.q}</p><p className="text-slate-700">{aiResponse.a}</p></div>}</DraggableWindow>}
+      {activeTools.questions && <DraggableWindow title="Question Bank" icon={BookOpen} onClose={() => toggleTool('questions')} initialPos={{ x: 50, y: 400 }}><div className="space-y-4"><div><label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Select Topic</label><div className="relative"><select value={selectedTopic} onChange={(e) => setSelectedTopic(e.target.value)} className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 focus:ring-emerald-500 focus:border-emerald-500 block">{Object.keys(QUESTION_BANK).map((topic) => (<option key={topic} value={topic}>{topic}</option>))}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500"><ChevronDown size={16} /></div></div></div><div className="space-y-2">{QUESTION_BANK[selectedTopic].map((item, idx) => (<div key={idx} className="border border-slate-100 rounded-lg overflow-hidden"><button onClick={() => setOpenQuestionId(openQuestionId === idx ? null : idx)} className="w-full flex justify-between items-center p-3 text-left bg-white hover:bg-slate-50 transition-colors"><span className="text-xs font-semibold text-slate-700">{item.q}</span>{openQuestionId === idx ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}</button>{openQuestionId === idx && (<div className="p-3 bg-emerald-50 text-xs text-slate-600 border-t border-slate-100"><strong className="text-emerald-700 block mb-1">Best Answer:</strong>{item.a}</div>)}</div>))}</div></div></DraggableWindow>}
+      {activeTools.feedback && <DraggableWindow title="Marking Sheet" icon={FileText} onClose={() => toggleTool('feedback')} initialPos={{ x: 800, y: 100 }}>{feedbackStep === 1 ? (<div className="text-center py-4"><p className="text-sm text-slate-500 mb-3">Fetching info for: <b>{roomId}</b></p><button onClick={handleFetchCandidate} disabled={fetchLoading} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold w-full">{fetchLoading ? "Loading..." : "Load Candidate"}</button></div>) : (<div className="space-y-3"><div className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg"><div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600"><User size={16}/></div><div><p className="text-sm font-bold text-slate-900">{candidateData?.applicantName}</p><p className="text-xs text-slate-500">{candidateData?.applicantEmail}</p></div></div><div className="space-y-2 max-h-[300px] overflow-y-auto">{questions.map((q) => (<div key={q.id} className="flex justify-between items-center text-sm border-b border-slate-50 pb-2"><span className="text-slate-700">{q.text}</span><div className="flex gap-1">{[2, 3, 4, 5].map(s => (<button key={s} onClick={() => setQuestions(prev => prev.map(qi => qi.id === q.id ? {...qi, score: s} : qi))} className={`w-6 h-6 rounded text-xs font-bold ${q.score === s ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{s}</button>))}</div></div>))}</div><div className="pt-2 border-t border-slate-100 flex justify-between items-center"><span className="font-bold text-lg text-slate-800">{questions.reduce((a,b)=>a+b.score,0)} / 30</span><button className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold">Submit</button></div></div>)}</DraggableWindow>}
+
     </main>
+  );
+}
+
+// ---- PAGE EXPORT ----
+export default function CallingPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen text-slate-500">Loading call...</div>}>
+      <CallingContent />
+    </Suspense>
   );
 }
