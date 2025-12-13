@@ -239,27 +239,17 @@ role – "candidate" or "company" (and possibly "hr", "admin" in future)
 
 status – "active", "inactive" etc.
 
-candidateProfile:
+# 3.candidateProfile:
 
 firstName, lastName
-
 phone, address
-
 educationalQualification
-
 currentJobPosition
-
 resumeUrl
-
 portfolioUrl
-
 companyProfile:
-
 companyName
-
 companyAddress
-
-other company info…
 
 ```
 
@@ -427,7 +417,7 @@ Used on /shortlist_candidates
 DELETE /api/company/candidate-applications – Delete application (also updates counts)
 
 🧪 Tech Stack
-
+```text
 Core technologies used:
 
 Framework: Next.js
@@ -458,26 +448,28 @@ npm or yarn
 A MongoDB connection (MongoDB Atlas or local)
 
 A Firebase project (for Web) + Service Account (for Admin SDK)
+```
+
 
 2️⃣ Installation
 
 Clone the repo
-
+```bash
 git clone https://github.com/your-username/interview-mate.git
 cd interview-mate
-
+```
 
 Install dependencies
-
+```bash
 npm install
 # or
 yarn install
-
+```
 
 Environment variables
 
 Create .env.local in the project root:
-
+```bash
 # --- MongoDB ---
 MONGODB_URI="your_mongodb_connection_string"
 
@@ -490,14 +482,14 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID="your-project-id"
 FIREBASE_PROJECT_ID="your-project-id"
 FIREBASE_CLIENT_EMAIL="service-account@your-project.iam.gserviceaccount.com"
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n....\n-----END PRIVATE KEY-----\n"
-
+```
 
 Run the development server
-
+```bash
 npm run dev
 # or
 yarn dev
-
+```
 
 Open:
 
@@ -505,8 +497,9 @@ http://localhost:3000
 
 🔐 Authentication & Security (Quick Overview)
 
-Client-side:
 
+Client-side:
+```text
 AuthContext uses Firebase Auth (email/password, Google, etc.)
 
 Exposes user, loading, logout to components
@@ -527,6 +520,7 @@ Role-based UI:
 Navbar hides Jobs, Apply, Interviews, etc. depending on role and loading state.
 
 Pages like /candidate_applications and /shortlist_candidates hard-block non-company roles by redirecting to /404.
+```
 
 🤝 Contributing
 
