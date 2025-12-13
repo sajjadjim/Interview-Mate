@@ -142,7 +142,7 @@ Route	                 Guest	Candidate	Company	HR/Admin
 /dashboard	              ❌       ✅    	✅       	✅
 /apply	                  ❌	   ✅	    ❌	         ❌
 /applications	          ❌	   ✅	    ❌	        ❌
-/candidate_applications	  ❌	      ❌    	 ✅       	❌
+/candidate_applications	  ❌	    ❌     	 ✅      ❌
 /shortlist_candidates	  ❌	   ❌	    ✅        	❌
 /interviews	             ❌	   ❌	    ❌       	✅
 
