@@ -140,9 +140,9 @@ Route	                 Guest	Candidate	Company	HR/Admin
 /	                      ✅	   ✅	    ✅	        ✅
 /jobs, /jobs/[id]	      ✅	   ✅	    ✅	        ✅
 /dashboard	              ❌       ✅    	✅       	✅
-/apply	                  ❌	    ✅	     ❌	        ❌
+/apply	                  ❌	   ✅	    ❌	         ❌
 /applications	          ❌	   ✅	    ❌	        ❌
-/candidate_applications	 ❌	   ❌    	✅       	❌
+/candidate_applications	  ❌	      ❌    	 ✅       	❌
 /shortlist_candidates	  ❌	   ❌	    ✅        	❌
 /interviews	             ❌	   ❌	    ❌       	✅
 
