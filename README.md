@@ -159,47 +159,45 @@ Folder Overview (simplified)
 ```bash
 
 src/
-  app/
-    (public pages)
-    page.jsx                   → Home
-    jobs/
-      page.jsx                 → Job listing
-      [id]/page.jsx            → Single job details + candidate "Apply"
-    apply/page.jsx             → Interview slot application form
-    applications/page.jsx      → Candidate "My Applications"
-    candidate_applications/    → Company view of all applicants
-      page.jsx
-    shortlist_candidates/      → Company view of shortlisted candidates
-      page.jsx
-    dashboard/page.jsx         → Role-aware dashboard
-    authentication/
-      login/page.jsx
-      register/page.jsx
-
-    api/
-      users/
-        me/route.js            → Get/update logged-in user doc (requires Firebase token)
-      applications/route.js    → Interview slot applications (apply + list)
-      users-jobs-application/route.js
-                               → Job applications (apply, list, check duplicate)
-      jobs/route.js            → Get/post jobs (list, create)
-      jobs/[id]/route.js       → Single job fetch
-      company/
-        candidate-applications/route.js
-                               → Company: jobs + applicants + counts
-        shortlist/route.js     → Company: add candidate to shortlist
-        shortlist-candidates/route.js
-                               → Company: read shortlisted candidates
-        candidate-applications (DELETE)
-                               → Company: delete an application
-
-  context/
-    AuthContext.jsx            → Firebase auth state, user, logout, etc.
-
-  lib/
-    dbConnect.js               → MongoDB connection helper
-    firebaseClient.js          → Firebase client config
-    firebaseAdmin.js           → Firebase Admin (ID token verification)
+|   (public pages)
+|    page.jsx                   → Home
+|    jobs/
+|     | page.jsx                 → Job listing
+|     | [id]/page.jsx            → Single job details + candidate "Apply"
+|    apply/page.jsx             → Interview slot application form
+|    applications/page.jsx      → Candidate "My Applications"
+|    candidate_applications/    → Company view of all applicants
+|     | page.jsx
+|    shortlist_candidates/      → Company view of shortlisted candidates
+|      page.jsx
+|    dashboard/page.jsx         → Role-aware dashboard
+|    authentication/
+|      login/page.jsx
+|      register/page.jsx
+|
+|    api/
+|      users/
+|        me/route.js            → Get/update logged-in user doc (requires Firebase token)
+|      applications/route.js    → Interview slot applications (apply + list)
+|      users-jobs-application/route.js
+|                               → Job applications (apply, list, check duplicate)
+|      jobs/route.js            → Get/post jobs (list, create)
+|      jobs/[id]/route.js       → Single job fetch
+|      company/
+|        candidate-applications/route.js
+|                               → Company: jobs + applicants + counts
+|        shortlist/route.js     → Company: add candidate to shortlist
+|        shortlist-candidates/route.js
+|                               → Company: read shortlisted candidates
+|        candidate-applications (DELETE)
+|                               → Company: delete an application
+|  context/
+|    AuthContext.jsx            → Firebase auth state, user, logout, etc.
+|
+|  lib/
+|    dbConnect.js               → MongoDB connection helper
+|    firebaseClient.js          → Firebase client config
+|    firebaseAdmin.js           → Firebase Admin (ID token verification)
 
 ```
 
