@@ -144,7 +144,7 @@ Route	                 Guest	Candidate	Company	HR/Admin
 /applications	          ❌	   ✅	    ❌	        ❌
 /candidate_applications	  ❌	   ❌     	✅          ❌
 /shortlist_candidates	  ❌	   ❌	    ✅        	❌
-/interviews	              ❌	     ❌	    ❌         ✅
+/interviews	              ❌	    ❌	     ❌          ✅
 
 ```
 
