@@ -376,16 +376,17 @@ approvalStatus (default: "Not approved")
 
 createdAt, updatedAt
 
-APIs:
-
+## 4. APIs:
+```text
 POST /api/applications – Submit new slot request
 
 GET /api/applications?email=... – Candidate’s own slot applications
 
 GET /api/applications – HR/admin can see all
+```
 
-5. Shortlisted Candidates (cv_shortListed_database)
-
+## 5. Shortlisted Candidates (cv_shortListed_database)
+```text
 Stores shortlists per company.
 
 Fields (per entry) roughly:
@@ -405,6 +406,7 @@ status (e.g. "shortlisted")
 applicationId (reference to original application)
 
 createdAt
+```
 
 APIs:
 
@@ -437,7 +439,9 @@ Animations: Framer Motion
 Icons: Lucide React
 
 In an earlier concept, NextAuth.js and Prisma were “suggested”, but the current implementation uses Firebase Auth + MongoDB instead.
+```
 
+```text
 🚀 Getting Started
 1️⃣ Prerequisites
 
@@ -456,6 +460,8 @@ A Firebase project (for Web) + Service Account (for Admin SDK)
 Clone the repo
 ```bash
 git clone https://github.com/your-username/interview-mate.git
+```
+```bash
 cd interview-mate
 ```
 
@@ -495,7 +501,7 @@ Open:
 
 http://localhost:3000
 
-🔐 Authentication & Security (Quick Overview)
+## 🔐 Authentication & Security (Quick Overview)
 
 
 Client-side:
@@ -503,26 +509,25 @@ Client-side:
 AuthContext uses Firebase Auth (email/password, Google, etc.)
 
 Exposes user, loading, logout to components
-
-Server-side APIs:
-
+```
+## Server-side APIs:
+```text
 Sensitive routes (like /api/users/me, some company APIs) expect:
 
 Authorization: Bearer <Firebase ID Token>
 
-
 On the server, firebaseAdmin.verifyIdToken() verifies the token and gets uid.
 
 MongoDB queries user with uid and checks role before returning data.
-
-Role-based UI:
-
+```
+```text
+#Role-based UI:
 Navbar hides Jobs, Apply, Interviews, etc. depending on role and loading state.
 
 Pages like /candidate_applications and /shortlist_candidates hard-block non-company roles by redirecting to /404.
 ```
 
-🤝 Contributing
+## 🤝 Contributing
 
 Contributions are welcome! 💙
 
@@ -545,28 +550,23 @@ git push origin feature/amazing-feature
 
 Open a Pull Request
 
-📜 License
+## 📜 License
 
 Distributed under the MIT License.
 See LICENSE for more information.
 
-👤 Author
-
+## 👤 Author
+```text
 Sajjad Hossain Jim
+GitHub: @sajjadjim
+```
 
-GitHub: @your-username
-
-LinkedIn: your-linkedin-profile
 
 <br /> <p align="center"> Made with ❤️ to help candidates and companies connect better. </p> ```
 
 If you want, I can next:
-
 Add a sequence diagram (text/mermaid) showing how a candidate applies for a job, or
-
 Add a separate docs/ file just for API documentation.
 
-Extended thinking
-ChatGPT can make mistakes. OpenAI doesn't use ChatGPT Pro workspace data to train its models.
 
 
