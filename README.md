@@ -1,4 +1,5 @@
 # 🚀 Interview Mate
+![Project Banner](https://github.com/sajjadjim/Interview-Mate/blob/main/Banner_image.png?raw=true)
 
 Bridging the gap between ambitious talent and innovative companies through real-time, topic-focused interviews.
 
@@ -52,7 +53,7 @@ The platform supports:
 
 > Add your live URL here (if deployed):
 
-```text
+```bash
 https://your-deploy-url.com
 
 
@@ -131,13 +132,15 @@ Open candidate CV from resumeUrl
 Shortlist candidates → cv_shortListed_database
 
 Delete applications
+```
+-----
 
 ⚠️ There is also support for HR role in other parts of the app (e.g. /interviews & interview slots). This README focuses on the core candidate/company flows.
 
 🗺 Site Map (Pages Overview)
 
 This is the high-level map of important routes and who can access them:
-
+```bash
 /                           → Public home page
 /jobs                       → Public job listings
 /jobs/[id]                  → Job details + "Apply" for candidates
@@ -150,6 +153,8 @@ This is the high-level map of important routes and who can access them:
 /profile                    → User profile (candidate/company fields)
 /authentication/login       → Login
 /authentication/register    → Registration
+
+````
 
 Access rules (simplified):
 Route	Guest	Candidate	Company	HR/Admin
@@ -166,6 +171,8 @@ Route	Guest	Candidate	Company	HR/Admin
 
 🏗 Architecture & Code Structure
 Folder Overview (simplified)
+
+```bash
 
 src/
   app/
@@ -210,10 +217,12 @@ src/
     firebaseClient.js          → Firebase client config
     firebaseAdmin.js           → Firebase Admin (ID token verification)
 
+```
 
 
-🧩 Data & APIs
+## 🧩 Data & APIs
 
+```text
 Here are the main collections in MongoDB and how they are used.
 
 1. users Collection
@@ -251,6 +260,8 @@ companyName
 companyAddress
 
 other company info…
+
+```
 
 API:
 
