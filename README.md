@@ -159,46 +159,64 @@ Folder Overview (simplified)
 ```bash
 
 src/
-|   (public pages)
-|    page.jsx                   → Home
-|    jobs/
-|     | page.jsx                 → Job listing
-|     | [id]/page.jsx            → Single job details + candidate "Apply"
-|    apply/page.jsx             → Interview slot application form
-|    applications/page.jsx      → Candidate "My Applications"
-|    candidate_applications/    → Company view of all applicants
-|     | page.jsx
-|    shortlist_candidates/      → Company view of shortlisted candidates
-|      page.jsx
-|    dashboard/page.jsx         → Role-aware dashboard
-|    authentication/
-|      login/page.jsx
-|      register/page.jsx
-|
-|    api/
-|      users/
-|        me/route.js            → Get/update logged-in user doc (requires Firebase token)
-|      applications/route.js    → Interview slot applications (apply + list)
-|      users-jobs-application/route.js
-|                               → Job applications (apply, list, check duplicate)
-|      jobs/route.js            → Get/post jobs (list, create)
-|      jobs/[id]/route.js       → Single job fetch
-|      company/
-|        candidate-applications/route.js
-|                               → Company: jobs + applicants + counts
-|        shortlist/route.js     → Company: add candidate to shortlist
-|        shortlist-candidates/route.js
-|                               → Company: read shortlisted candidates
-|        candidate-applications (DELETE)
-|                               → Company: delete an application
-|  context/
+|   |(public pages)
+|   |about
+|   |  | page.jsx                 → About page
+|   |contact
+|   |  | page.jsx                 → Contact page
+|   |(protected pages)
+|   |page.jsx                   → Home
+|   |interviews/page.jsx         → HR/admin interview slot applicants
+|   |admin/page.jsx              → Admin panel (future)
+|   |   |candiate_applications/  → Admin: all candidate applications
+|   |      | page.jsx
+|   |   |pending-company-profile/    → Admin: all shortlisted candidates
+|   |      | page.jsx
+|   |   |pending-hr/    → Admin: all pending hr request candidates
+|   |      | page.jsx
+|   |jobs/
+|   |  | page.jsx                 → Job listing
+|   |  | [id]/page.jsx            → Single job details + candidate "Apply"
+|   |apply/page.jsx             → Interview slot application form
+|   |applications/page.jsx      → Candidate "My Applications"
+|   |candidate_applications/    → Company view of all applicants
+|   |  | page.jsx
+|   |shortlist_candidates/      → Company view of shortlisted candidates
+|   |   | page.jsx
+|   |dashboard/page.jsx         → Role-aware dashboard
+|   |authentication/
+|   |  | login/page.jsx
+|   |  | register/page.jsx
+|   |  
+|   | api/
+|   |   |users/
+|   |    me/route.js            → Get/update logged-in user doc (requires Firebase token)
+|   |   |applications/route.js    → Interview slot applications (apply + list)
+|   |   |users-jobs-application/route.js
+|   |                            → Job applications (apply, list, check duplicate)
+|   |   |jobs/route.js            → Get/post jobs (list, create)
+|   |   |jobs/[id]/route.js       → Single job fetch
+|   |   |company/
+|   |     candidate-applications/route.js
+|   |                            → Company: jobs + applicants + counts
+|   |     shortlist/route.js     → Company: add candidate to shortlist
+|   |     shortlist-candidates/route.js
+|   |                            → Company: read shortlisted candidates
+|   |     candidate-applications (DELETE)
+|   |                            → Company: delete an application
+|context/
 |    AuthContext.jsx            → Firebase auth state, user, logout, etc.
 |
-|  lib/
-|    dbConnect.js               → MongoDB connection helper
-|    firebaseClient.js          → Firebase client config
-|    firebaseAdmin.js           → Firebase Admin (ID token verification)
-
+|lib/
+|   | dbConnect.js               → MongoDB connection helper
+|   | firebaseClient.js          → Firebase client config
+|   | firebaseAdmin.js           → Firebase Admin (ID token verification)
+|models/
+|   | User.js                    → Mongoose model for users collection
+|   | Job.js                     → Mongoose model for jobs collection
+|   | UsersJobsApplication.js    → Mongoose model for users_jobs_application collection
+|   | Application.js             → Mongoose model for interview slot applications
+|   | CvShortListedDatabase.js   → Mongoose model for cv_shortListed_database collection
 ```
 
 
