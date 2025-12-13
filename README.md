@@ -55,89 +55,67 @@ The platform supports:
 
 ```bash
 https://your-deploy-url.com
+```
 
-
-👥 User Roles & Flows
+## 👥 User Roles & Flows
 
 The system currently uses Firebase Auth + MongoDB and works around these roles:
-
+```text
 1. Guest (Not Logged In)
 
 Can see:
 
 Home page
-
 Public job listings (/jobs)
-
 Job details (/jobs/[id])
-
 About, Contact, etc.
 
 Cannot:
 
 Apply for jobs
-
 Apply for interview slots
-
 See any dashboards or private data
-
-2. Candidate
-
+```
+## 2. Candidate
+```text
 Logs in via Firebase
-
 Has a MongoDB user document with role: "candidate"
 
 Can:
 
 Maintain their candidate profile (including resumeUrl, portfolio, etc.)
-
 Apply for interview slots via /apply
-
 Apply for jobs via /jobs/[id] (Apply button)
-
 View all applications in /applications:
-
 Interview slot applications
-
 Job applications (from users_jobs_application)
-
-3. Company
-
+```
+## 3. Company
+```text
 Logs in via Firebase
-
 Has a MongoDB user document with role: "company"
 
 Can:
-
 Set up a company profile (name, info)
-
 Post jobs (stored in jobs collection)
-
 See a company dashboard (/dashboard) with:
-
 Total jobs posted
-
 Total applications received
-
 Latest posted jobs
-
-View candidate applications in /candidate_applications:
+```
+## View candidate applications in /candidate_applications:
 
 Filter by job
-
 Search applicants by email
-
 Open candidate CV from resumeUrl
-
 Shortlist candidates → cv_shortListed_database
-
 Delete applications
 ```
 -----
 
 ⚠️ There is also support for HR role in other parts of the app (e.g. /interviews & interview slots). This README focuses on the core candidate/company flows.
 
-🗺 Site Map (Pages Overview)
+## 🗺 Site Map (Pages Overview)
 
 This is the high-level map of important routes and who can access them:
 ```bash
@@ -157,6 +135,7 @@ This is the high-level map of important routes and who can access them:
 ````
 
 Access rules (simplified):
+```text
 Route	Guest	Candidate	Company	HR/Admin
 /	✅	✅	✅	✅
 /jobs, /jobs/[id]	✅	✅	✅	✅
@@ -165,13 +144,14 @@ Route	Guest	Candidate	Company	HR/Admin
 /candidate_applications	❌	❌	✅	❌
 /shortlist_candidates	❌	❌	✅	❌
 /interviews	❌	❌	❌	✅
-/dashboard	❌	✅*	✅	✅
+/dashboard	❌	✅	✅	✅
 
-*Candidate dashboard currently shows a simpler view; company dashboard shows job stats.
+Candidate dashboard currently shows a simpler view; company dashboard shows job stats.
 
-🏗 Architecture & Code Structure
+```
+
+## 🏗 Architecture & Code Structure
 Folder Overview (simplified)
-
 ```bash
 
 src/
