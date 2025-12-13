@@ -1,7 +1,7 @@
 // src/app/api/users/me/route.js
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/dbConnect";
-import { verifyFirebaseIdToken } from "@/app/lib/firebaseAdmin";
+import { verifyFirebaseIdToken } from "@/lib/firebaseAdmin";
 
 
 /**

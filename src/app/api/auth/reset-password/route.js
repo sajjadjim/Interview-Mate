@@ -66,7 +66,7 @@
 // }
 
 import { NextResponse } from "next/server";
-import admin from "@/app/lib/firebaseAdmin"; // Ensure this path matches your file structure
+import admin from "@/lib/firebaseAdmin"; // Ensure this path matches your file structure
 import nodemailer from "nodemailer";
 
 export async function POST(request) {
