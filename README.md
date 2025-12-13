@@ -5,6 +5,7 @@ Bridging the gap between ambitious talent and innovative companies through real-
 
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
+<br>
 ![Tech](https://img.shields.io/badge/tech-Next.js-black?logo=nextdotjs)
 ![Language](https://img.shields.io/badge/language-JavaScript-yellow?logo=javascript)
 
@@ -207,41 +208,51 @@ src/
 
 ```text
 Here are the main collections in MongoDB and how they are used.
---
-1. users Collection
+
+- 1. users Collection
 
 Stores extended profile data for authenticated users.
---
-2.Key fields:
+Example document:
+```bash
+{
+  _id: ObjectId("..."),
+  uid: "Firebase UID",
+  email: "  
+}
+```
+- 2.Key fields:
 
+```text
+ - 2.a. Common fields (in users):
 uid – Firebase UID
 email
 
 role – "candidate" or "company" (and possibly "hr", "admin" in future)
 status – "active", "inactive" etc.
-
---
- 3.candidateProfile:
-
-firstName, lastName
-phone, address
-educationalQualification
-currentJobPosition
-resumeUrl
-portfolioUrl
-companyProfile:
-companyName
-companyAddress
-
 ```
+
+ - **3.candidateProfile:**
+-firstName, lastName
+-phone, address
+-educationalQualification
+-currentJobPosition
+-resumeUrl
+-portfolioUrl
+
+-**companyProfile:**
+-companyName
+-companyAddress
+
 
 API:
 ```text
 1. GET /api/users/me
 → Returns the current logged-in user document. Requires:
 Authorization: Bearer <Firebase ID Token>
-
+```
+```
 PATCH /api/users/me
+```bash
 → Updates candidate/company profile fields.
 ```
 
@@ -249,7 +260,9 @@ PATCH /api/users/me
 
 Represents jobs posted by companies.
 
-Example fields:
+-**Example fields:**
+```text
+companyUid – references users.
 _id
 id (optional human readable e.g. "JOB-001")
 title
@@ -260,7 +273,6 @@ location
 salary:
 min
 max
-
 currency
 jobVacancy
 jobTime
@@ -272,6 +284,7 @@ description
 requirements[]
 responsibilities[]
 createdByEmail (company user’s email)
+```
 
  ## 1.APIs:
 ```text
