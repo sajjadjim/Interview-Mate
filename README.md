@@ -60,9 +60,9 @@ https://your-deploy-url.com
 ## 👥 User Roles & Flows
 
 The system currently uses Firebase Auth + MongoDB and works around these roles:
-```text
-1. Guest (Not Logged In)
 
+## 1. Guest (Not Logged In)
+```text
 Can see:
 
 Home page
@@ -136,19 +136,19 @@ This is the high-level map of important routes and who can access them:
 
 Access rules (simplified):
 ```text
-Route	Guest	Candidate	Company	HR/Admin
-/	✅	✅	✅	✅
-/jobs, /jobs/[id]	✅	✅	✅	✅
-/apply	❌	✅	❌	❌
-/applications	❌	✅	❌	❌
-/candidate_applications	❌	❌	✅	❌
-/shortlist_candidates	❌	❌	✅	❌
-/interviews	❌	❌	❌	✅
-/dashboard	❌	✅	✅	✅
-
+Route	                  Guest	Candidate	Company	HR/Admin
+/	                        ✅	   ✅	    ✅	        ✅
+/jobs, /jobs/[id]	        ✅	   ✅	    ✅	        ✅
+/apply	                  ❌	   ✅	    ❌	        ❌
+/applications	            ❌	   ✅	    ❌	        ❌
+/candidate_applications	  ❌	   ❌    	✅       	❌
+/shortlist_candidates	    ❌	   ❌	    ✅        	❌
+/interviews	              ❌	   ❌	    ❌       	✅
+/dashboard	              ❌    ✅    	✅       	✅
+```
 Candidate dashboard currently shows a simpler view; company dashboard shows job stats.
 
-```
+
 
 ## 🏗 Architecture & Code Structure
 Folder Overview (simplified)
@@ -204,22 +204,21 @@ src/
 
 ```text
 Here are the main collections in MongoDB and how they are used.
-
+--
 1. users Collection
 
 Stores extended profile data for authenticated users.
-
-Key fields:
+--
+2.Key fields:
 
 uid – Firebase UID
-
 email
 
 role – "candidate" or "company" (and possibly "hr", "admin" in future)
-
 status – "active", "inactive" etc.
 
-# 3.candidateProfile:
+--
+ 3.candidateProfile:
 
 firstName, lastName
 phone, address
@@ -234,112 +233,77 @@ companyAddress
 ```
 
 API:
-
-GET /api/users/me
+```text
+1. GET /api/users/me
 → Returns the current logged-in user document. Requires:
-
 Authorization: Bearer <Firebase ID Token>
-
 
 PATCH /api/users/me
 → Updates candidate/company profile fields.
+```
 
 2. jobs Collection
 
 Represents jobs posted by companies.
 
 Example fields:
-
 _id
-
 id (optional human readable e.g. "JOB-001")
-
 title
-
 company
-
 sector
-
 type (Full-time, Part-time, etc.)
-
 location
-
 salary:
-
 min
-
 max
 
 currency
-
 jobVacancy
-
 jobTime
-
 jobAddress
-
 postedDate
-
 deadline
-
 expireAt
-
 description
-
 requirements[]
-
 responsibilities[]
-
 createdByEmail (company user’s email)
 
-APIs:
-
+ ## 1.APIs:
+```text
 GET /api/jobs – List jobs (for /jobs)
-
 GET /api/jobs/[id] – Single job (for /jobs/[id])
-
+```
 3. users_jobs_application Collection
-
+```text
 Stores job applications submitted by candidates.
 
 Example fields:
-
 jobId – references jobs._id
-
 jobTitle, company, sector, type, location
-
 salary
-
 postedDate, jobVacancy, jobTime, jobAddress, jobDeadline
-
 candidateUid
-
 candidateEmail, candidateName, candidatePhone, candidateAddress
-
 resumeUrl
-
 status – e.g. "submitted", "shortlisted", "accepted", "rejected"
-
 appliedAt – when candidate applied
-
 createdAt, updatedAt
+```
 
-APIs:
-
+## 2.APIs:
+```text
 POST /api/users-jobs-application – Candidate applies for a job:
-
 Validates candidate role
-
 Verifies resumeUrl exists in candidateProfile
-
 Prevents duplicate applications (candidateUid + jobId)
-
 GET /api/users-jobs-application?candidateUid=... – Candidate’s own applications (for /applications page)
-
 GET /api/users-jobs-application?candidateUid=...&jobId=... – Check if already applied
+```
 
-4. Interview Slot Applications (applications Collection)
-
+## 3. Interview Slot Applications (applications Collection)
+```text
 For the /apply interview slots (time/date/topic).
 
 Fields include:
@@ -355,7 +319,7 @@ paymentStatus (default: "unpaid")
 approvalStatus (default: "Not approved")
 
 createdAt, updatedAt
-
+```
 ## 4. APIs:
 ```text
 POST /api/applications – Submit new slot request
@@ -389,37 +353,31 @@ createdAt
 ```
 
 APIs:
-
-POST /api/company/shortlist – Company shortlists an application
-
-GET /api/company/shortlist-candidates?companyEmail=...
-
-Used on /shortlist_candidates
-
-DELETE /api/company/candidate-applications – Delete application (also updates counts)
-
-🧪 Tech Stack
 ```text
+POST /api/company/shortlist – Company shortlists an application
+GET /api/company/shortlist-candidates?companyEmail=...
+Used on /shortlist_candidates
+DELETE /api/company/candidate-applications – Delete application (also updates counts)
+```
+## 🧪 Tech Stack
 Core technologies used:
 
-Framework: Next.js
+**Framework: Next.js**
 
-UI Library: React
+**UI Library: React**
 
-Styling: Tailwind CSS
+**Styling: Tailwind CSS**
 
-Auth: Firebase Authentication
+**Auth: Firebase Authentication**
 
-Database: MongoDB
+**Database: MongoDB**
 
-ORM / DB Helper: Custom dbConnect using MongoDB driver
-
-Animations: Framer Motion
-
-Icons: Lucide React
+**ORM / DB Helper: Custom dbConnect using MongoDB driver**
+**Animations: Framer Motion**
+**Icons: Lucide React**
 
 In an earlier concept, NextAuth.js and Prisma were “suggested”, but the current implementation uses Firebase Auth + MongoDB instead.
-```
+
 
 ```text
 🚀 Getting Started
