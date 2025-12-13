@@ -139,12 +139,12 @@ Access rules (simplified):
 Route	                  Guest	Candidate	Company	HR/Admin
 /	                        ✅	   ✅	    ✅	        ✅
 /jobs, /jobs/[id]	        ✅	   ✅	    ✅	        ✅
-/apply	                  ❌	   ✅	    ❌	        ❌
+/apply	                   ❌   ✅	    ❌	        ❌
 /applications	            ❌	   ✅	    ❌	        ❌
-/candidate_applications	  ❌	   ❌    	✅       	❌
+/candidate_applications	   ❌   ❌    	✅       	❌
 /shortlist_candidates	    ❌	   ❌	    ✅        	❌
 /interviews	              ❌	   ❌	    ❌       	✅
-/dashboard	              ❌    ✅    	✅       	✅
+/dashboard	               ❌    ✅    	✅       	✅
 ```
 Candidate dashboard currently shows a simpler view; company dashboard shows job stats.
 
@@ -386,18 +386,18 @@ In an earlier concept, NextAuth.js and Prisma were “suggested”, but the curr
 Node.js ≥ 18
 
 npm or yarn
-
+```
 A MongoDB connection (MongoDB Atlas or local)
 
 A Firebase project (for Web) + Service Account (for Admin SDK)
-```
+
 
 
 2️⃣ Installation
 
 Clone the repo
 ```bash
-git clone https://github.com/your-username/interview-mate.git
+git clone https://github.com/sajjadjim/interview-mate.git
 ```
 ```bash
 cd interview-mate
