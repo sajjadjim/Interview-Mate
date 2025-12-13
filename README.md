@@ -139,12 +139,13 @@ Access rules (simplified):
 Route	                 Guest	Candidate	Company	HR/Admin
 /	                      ✅	   ✅	    ✅	        ✅
 /jobs, /jobs/[id]	      ✅	   ✅	    ✅	        ✅
+/dashboard	             ❌    ✅    	✅       	✅
 /apply	                 ❌	   ✅	    ❌	        ❌
 /applications	          ❌	   ✅	    ❌	        ❌
 /candidate_applications	 ❌	   ❌    	✅       	❌
 /shortlist_candidates	  ❌	   ❌	    ✅        	❌
 /interviews	             ❌	   ❌	    ❌       	✅
-/dashboard	             ❌    ✅    	✅       	✅
+
 ```
 
 
