@@ -135,16 +135,16 @@ This is the high-level map of important routes and who can access them:
 ````
 
 Access rules (simplified):
-```bash
-Route	                       Guest	Candidate	Company	HR/Admin
-/	                           ✅	   ✅	    ✅	        ✅
-/jobs, /jobs/[id]	           ✅	   ✅	    ✅	        ✅
-/apply	                     ❌	   ✅	    ❌	        ❌
-/applications	               ❌	   ✅	    ❌	        ❌
-/candidate_applications	     ❌	   ❌    	✅       	❌
-/shortlist_candidates	       ❌	   ❌	    ✅        	❌
-/interviews	                 ❌	   ❌	    ❌       	✅
-/dashboard	                 ❌     ✅    	✅       	✅
+```text
+Route	                 Guest	Candidate	Company	HR/Admin
+/	                      ✅	   ✅	    ✅	        ✅
+/jobs, /jobs/[id]	      ✅	   ✅	    ✅	        ✅
+/apply	                ❌	   ✅	    ❌	        ❌
+/applications	          ❌	   ✅	    ❌	        ❌
+/candidate_applications	❌	   ❌    	✅       	❌
+/shortlist_candidates	  ❌	   ❌	    ✅        	❌
+/interviews	            ❌	   ❌	    ❌       	✅
+/dashboard	            ❌    ✅    	✅       	✅
 ```
 Candidate dashboard currently shows a simpler view; company dashboard shows job stats.
 
