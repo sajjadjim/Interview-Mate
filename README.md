@@ -135,7 +135,7 @@ This is the high-level map of important routes and who can access them:
 ````
 
 Access rules (simplified):
-```text
+```bash
 Route	                       Guest	Candidate	Company	HR/Admin
 /	                           ✅	   ✅	    ✅	        ✅
 /jobs, /jobs/[id]	           ✅	   ✅	    ✅	        ✅
