@@ -1,20 +1,14 @@
-
 import admin from "firebase-admin";
-
 // 1. Get the raw key
 const rawKey = process.env.FIREBASE_PRIVATE_KEY;
-
 // 2. robust cleaning function
 // This fixes common Vercel copy-paste errors (extra quotes, wrong newlines)
 const formatPrivateKey = (key) => {
   if (!key) return undefined;
-  
   // Remove starting/ending double quotes if they exist (Common Vercel mistake)
   let cleanKey = key.replace(/^"|"$/g, "");
-  
   // Replace literal "\n" characters with real newlines
   cleanKey = cleanKey.replace(/\\n/g, "\n");
-  
   return cleanKey;
 };
 

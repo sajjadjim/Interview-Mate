@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation"; 
+import { useSearchParams } from "next/navigation"; 
 import { 
   Video, PhoneCall, PhoneOff, Clock, AlertTriangle, 
   FileText, Search, User, X, Send, 
@@ -10,13 +10,11 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
-// ==========================================
-// 1. CONFIGURATION & STATIC DATA
-// ==========================================
-
+// ---- ZEGOCLOUD env config ----
 const ZEGO_APP_ID = Number(process.env.NEXT_PUBLIC_ZEGO_APP_ID || 0);
 const ZEGO_SERVER_SECRET = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET || "";
 
+// ---- STATIC DATA: QUESTION BANK ----
 const QUESTION_BANK = {
   "IT & Engineering": [
     { q: "What is the difference between REST and GraphQL?", a: "REST uses standard HTTP methods. GraphQL allows clients to request specific data structure." },
@@ -41,10 +39,7 @@ const QUESTION_BANK = {
   ]
 };
 
-// ==========================================
-// 2. DRAGGABLE WINDOW COMPONENT
-// ==========================================
-
+// ---- DRAGGABLE WINDOW COMPONENT ----
 const DraggableWindow = ({ title, icon: Icon, onClose, children, initialPos = { x: 20, y: 100 } }) => {
   const [pos, setPos] = useState(initialPos);
   const [dragging, setDragging] = useState(false);
@@ -108,33 +103,21 @@ const DraggableWindow = ({ title, icon: Icon, onClose, children, initialPos = { 
   );
 };
 
-// ==========================================
-// 3. MAIN LOGIC COMPONENT
-// ==========================================
-
+// ---- MAIN LOGIC COMPONENT (Renamed from CallingPage) ----
 function CallingContent() {
-  // ------------------------------------------------------------------
-  // PART A: DECLARE ALL HOOKS FIRST (Fixes "Render Order" Error)
-  // ------------------------------------------------------------------
-  
-  const { user, loading } = useAuth();
-  const router = useRouter();
-  const searchParamsHook = useSearchParams(); // Hook declared at top level
-  
-  // State Hooks
+  const { user } = useAuth();
+  const searchParamsHook = useSearchParams();
   const [userRole, setUserRole] = useState(null);
   
   // Zego State
-  // We use user?.displayName safely because 'user' might be null initially
   const initialRoomId = searchParamsHook.get("roomId") || "692dc62f0d3daff50293457b"; 
-  const initialDisplayName = searchParamsHook.get("name") || user?.displayName || "Interviewmate User";
+  const initialDisplayName = searchParamsHook.get("name") || "User";
 
   const [roomId, setRoomId] = useState(initialRoomId);
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [joined, setJoined] = useState(false);
   const [callEnded, setCallEnded] = useState(false);
   const [timeLeft, setTimeLeft] = useState(30 * 60);
-  
   const containerRef = useRef(null);
   const zegoInstanceRef = useRef(null);
   const hasZegoConfig = ZEGO_APP_ID && ZEGO_SERVER_SECRET;
@@ -172,18 +155,7 @@ function CallingContent() {
     { id: 6, text: "Professionalism", score: 2 },
   ]);
 
-  // ------------------------------------------------------------------
-  // PART B: USE EFFECTS (Logic)
-  // ------------------------------------------------------------------
-
-  // 1. Protected Route: Redirect if not logged in
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push("/login");
-    }
-  }, [user, loading, router]);
-
-  // 2. Fetch User Role
+  // Auth & Role
   useEffect(() => {
     const fetchUserRole = async () => {
       if (!user) return;
@@ -197,10 +169,10 @@ function CallingContent() {
         }
       } catch (e) { console.error(e); }
     };
-    if (user) fetchUserRole();
+    fetchUserRole();
   }, [user]);
 
-  // 3. Timer Logic
+  // Timer
   useEffect(() => {
     if (!joined || callEnded) return;
     const id = setInterval(() => {
@@ -217,16 +189,13 @@ function CallingContent() {
     return () => clearInterval(id);
   }, [joined, callEnded]);
 
-  // ------------------------------------------------------------------
-  // PART C: HANDLERS
-  // ------------------------------------------------------------------
-
+  // Zego Join
   const handleJoin = async () => {
     if (!containerRef.current || !hasZegoConfig) return;
     setJoined(true); setCallEnded(false);
     
     const { ZegoUIKitPrebuilt } = await import("@zegocloud/zego-uikit-prebuilt");
-    const userID = user?.uid || `${Date.now()}`;
+    const userID = `${Date.now()}`;
     const safeRoomId = roomId.replace(/[^a-zA-Z0-9_-]/g, "") || "InterviewRoom";
 
     const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
@@ -314,28 +283,6 @@ function CallingContent() {
     }
   };
 
-  // ------------------------------------------------------------------
-  // PART D: CONDITIONAL RENDERING (Must be AFTER all hooks)
-  // ------------------------------------------------------------------
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-2">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-slate-500 text-sm font-medium">Verifying access...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // If redirection hasn't happened yet but user is null, return nothing or a fallback
-  if (!user) return null;
-
-  // ------------------------------------------------------------------
-  // PART E: MAIN UI RETURN
-  // ------------------------------------------------------------------
-
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col items-center py-4 px-4 relative overflow-hidden">
       
@@ -365,7 +312,7 @@ function CallingContent() {
         )}
       </div>
 
-      {/* WARNING BANNER */}
+      {/* WARNING BANNER (Hidden for HR) */}
       {userRole !== 'hr' && (
         <div className="w-full max-w-6xl mb-4 animate-in fade-in slide-in-from-top-2">
           <div className="bg-red-50 border border-red-100 text-red-800 text-xs px-4 py-2 rounded-lg flex items-center justify-between shadow-sm">
@@ -445,7 +392,7 @@ function CallingContent() {
         </div>
       )}
 
-      {/* FLOATING TOOLS */}
+      {/* HR TOOLS */}
       {activeTools.search && <DraggableWindow title="Google Search" icon={Globe} onClose={() => toggleTool('search')} initialPos={{ x: 50, y: 150 }}><form onSubmit={handleGoogleSearch} className="flex gap-2"><input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search topic..." className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" autoFocus /><button type="submit" className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700"><Search size={18} /></button></form></DraggableWindow>}
       {activeTools.ai && <DraggableWindow title="Ask AI Assistant" icon={BrainCircuit} onClose={() => toggleTool('ai')} initialPos={{ x: 400, y: 150 }}><div className="flex gap-2 mb-4"><input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="e.g. React Hooks..." className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500" /><button onClick={handleAskAi} disabled={aiLoading} className="bg-violet-600 text-white p-2 rounded-lg hover:bg-violet-700 disabled:opacity-50">{aiLoading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send size={18} />}</button></div>{aiResponse && <div className="bg-violet-50 rounded-lg p-3 text-sm border border-violet-100"><p className="font-bold text-violet-800 mb-1">Q: {aiResponse.q}</p><p className="text-slate-700">{aiResponse.a}</p></div>}</DraggableWindow>}
       {activeTools.questions && <DraggableWindow title="Question Bank" icon={BookOpen} onClose={() => toggleTool('questions')} initialPos={{ x: 50, y: 400 }}><div className="space-y-4"><div><label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Select Topic</label><div className="relative"><select value={selectedTopic} onChange={(e) => setSelectedTopic(e.target.value)} className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 focus:ring-emerald-500 focus:border-emerald-500 block">{Object.keys(QUESTION_BANK).map((topic) => (<option key={topic} value={topic}>{topic}</option>))}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500"><ChevronDown size={16} /></div></div></div><div className="space-y-2">{QUESTION_BANK[selectedTopic].map((item, idx) => (<div key={idx} className="border border-slate-100 rounded-lg overflow-hidden"><button onClick={() => setOpenQuestionId(openQuestionId === idx ? null : idx)} className="w-full flex justify-between items-center p-3 text-left bg-white hover:bg-slate-50 transition-colors"><span className="text-xs font-semibold text-slate-700">{item.q}</span>{openQuestionId === idx ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}</button>{openQuestionId === idx && (<div className="p-3 bg-emerald-50 text-xs text-slate-600 border-t border-slate-100"><strong className="text-emerald-700 block mb-1">Best Answer:</strong>{item.a}</div>)}</div>))}</div></div></DraggableWindow>}
@@ -455,10 +402,7 @@ function CallingContent() {
   );
 }
 
-// ==========================================
-// 4. EXPORT WITH SUSPENSE
-// ==========================================
-
+// ---- PAGE EXPORT ----
 export default function CallingPage() {
   return (
     <Suspense fallback={<div className="flex items-center justify-center h-screen text-slate-500">Loading call...</div>}>
