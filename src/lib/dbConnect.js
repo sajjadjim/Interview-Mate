@@ -2,7 +2,7 @@
 import { MongoClient, ServerApiVersion } from "mongodb";
 
 const uri = process.env.MONGODB_URI;
-const dbName = process.env.DB_NAME || "interview_mate";
+const dbName = process.env.DB_NAME || "interview_mate" || "InterviewMate";
 
 if (!uri) throw new Error("⚠️ Missing MONGODB_URI in environment");
 

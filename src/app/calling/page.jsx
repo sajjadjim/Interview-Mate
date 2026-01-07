@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation"; 
 import { 
-  Video, PhoneCall, PhoneOff, Clock, AlertTriangle, 
+  Video, Clock, AlertTriangle, 
   FileText, Search, User, X, Send, 
   BookOpen, BrainCircuit, Globe, GripHorizontal, ChevronDown, ChevronUp,
-  Info, ShieldAlert
+  Info, ShieldAlert, CheckCircle
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -114,20 +114,19 @@ const DraggableWindow = ({ title, icon: Icon, onClose, children, initialPos = { 
 
 function CallingContent() {
   // ------------------------------------------------------------------
-  // PART A: DECLARE ALL HOOKS FIRST (Fixes "Render Order" Error)
+  // PART A: HOOKS
   // ------------------------------------------------------------------
   
   const { user, loading } = useAuth();
   const router = useRouter();
-  const searchParamsHook = useSearchParams(); // Hook declared at top level
+  const searchParamsHook = useSearchParams();
   
   // State Hooks
   const [userRole, setUserRole] = useState(null);
   
   // Zego State
-  // We use user?.displayName safely because 'user' might be null initially
   const initialRoomId = searchParamsHook.get("roomId") || "692dc62f0d3daff50293457b"; 
-  const initialDisplayName = searchParamsHook.get("name") || user?.displayName || "Interviewmate User";
+  const initialDisplayName = searchParamsHook.get("name") || user?.displayName || "User";
 
   const [roomId, setRoomId] = useState(initialRoomId);
   const [displayName, setDisplayName] = useState(initialDisplayName);
@@ -163,6 +162,9 @@ function CallingContent() {
   const [candidateData, setCandidateData] = useState(null);
   const [feedbackStep, setFeedbackStep] = useState(1);
   const [fetchLoading, setFetchLoading] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  
   const [questions, setQuestions] = useState([
     { id: 1, text: "Technical Knowledge", score: 2 },
     { id: 2, text: "Communication Skills", score: 2 },
@@ -173,10 +175,10 @@ function CallingContent() {
   ]);
 
   // ------------------------------------------------------------------
-  // PART B: USE EFFECTS (Logic)
+  // PART B: EFFECTS
   // ------------------------------------------------------------------
 
-  // 1. Protected Route: Redirect if not logged in
+  // 1. Protected Route
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login");
@@ -200,7 +202,7 @@ function CallingContent() {
     if (user) fetchUserRole();
   }, [user]);
 
-  // 3. Timer Logic
+  // 3. Timer
   useEffect(() => {
     if (!joined || callEnded) return;
     const id = setInterval(() => {
@@ -293,6 +295,7 @@ function CallingContent() {
     }
   };
 
+  // --- FETCH CANDIDATE INFO ---
   const handleFetchCandidate = async () => {
     if(!roomId) return;
     setFetchLoading(true);
@@ -307,34 +310,74 @@ function CallingContent() {
         setCandidateData(data.data);
         setFeedbackStep(2);
       } else {
-        alert("Candidate not found!");
+        alert("Candidate not found! Check Room ID.");
       }
+    } catch (e) {
+      alert("Error fetching candidate.");
     } finally {
       setFetchLoading(false);
     }
   };
 
+  // --- SUBMIT FEEDBACK TO DATABASE ---
+  const handleSubmitFeedback = async () => {
+    // 1. Safety Check
+    if (!candidateData || !user) {
+      alert("Missing candidate data or user login.");
+      return;
+    }
+    
+    setSubmitLoading(true);
+    const totalScore = questions.reduce((a, b) => a + b.score, 0);
+
+    // 2. Prepare Payload (Robust Naming Check)
+    const payload = {
+      applicationId: candidateData.applicationId || candidateData._id,
+      roomId: roomId,
+      // Fallback: check 'applicantName', then 'name', then default
+      candidateName: candidateData.applicantName || candidateData.name || "Unknown Candidate",
+      candidateEmail: candidateData.applicantEmail || candidateData.email,
+      interviewerEmail: user.email,
+      interviewerName: user.displayName || "HR Interviewer",
+      score: totalScore,
+      breakdown: questions, 
+      date: new Date().toISOString()
+    };
+
+    console.log("Sending Payload:", payload);
+
+    try {
+      const res = await fetch('/api/reviews', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await res.json();
+
+      if (res.ok) {
+        setSubmitSuccess(true);
+        setTimeout(() => {
+            // Optional: Close window after success
+            toggleTool('feedback'); 
+        }, 2500);
+      } else {
+        alert(`Failed: ${result.message || result.error || "Unknown Error"}`);
+      }
+    } catch (error) {
+      console.error("Error submitting marks:", error);
+      alert("Network error. Could not save marks.");
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
   // ------------------------------------------------------------------
-  // PART D: CONDITIONAL RENDERING (Must be AFTER all hooks)
+  // PART D: RENDER
   // ------------------------------------------------------------------
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-2">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-slate-500 text-sm font-medium">Verifying access...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // If redirection hasn't happened yet but user is null, return nothing or a fallback
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50">Loading...</div>;
   if (!user) return null;
-
-  // ------------------------------------------------------------------
-  // PART E: MAIN UI RETURN
-  // ------------------------------------------------------------------
 
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col items-center py-4 px-4 relative overflow-hidden">
@@ -377,7 +420,7 @@ function CallingContent() {
         </div>
       )}
 
-      {/* MAIN VIDEO LAYOUT */}
+      {/* VIDEO LAYOUT */}
       <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-4 gap-4 h-[calc(100vh-140px)]">
          <div className="lg:col-span-3 bg-black rounded-2xl overflow-hidden relative shadow-2xl border border-slate-900">
             <div ref={containerRef} className="w-full h-full" />
@@ -422,22 +465,6 @@ function CallingContent() {
                    <h2 className="text-2xl font-bold">Mandatory Interview Rules</h2>
                    <p className="text-red-100 text-sm mt-1">Please read carefully before joining.</p>
                </div>
-               
-               <div className="p-6 space-y-4">
-                   <div className="flex gap-4 items-start">
-                       <div className="h-8 w-8 bg-red-50 text-red-600 rounded-full flex items-center justify-center font-bold flex-shrink-0">1</div>
-                       <div><h4 className="font-bold text-slate-800 text-sm">Solid Background Required</h4><p className="text-xs text-slate-500 mt-1">Your video background <span className="text-red-600 font-bold">must be a single solid color</span> (e.g., White, Blue, or Green wall).</p></div>
-                   </div>
-                   <div className="flex gap-4 items-start">
-                       <div className="h-8 w-8 bg-red-50 text-red-600 rounded-full flex items-center justify-center font-bold flex-shrink-0">2</div>
-                       <div><h4 className="font-bold text-slate-800 text-sm">Camera & Mic Policy</h4><p className="text-xs text-slate-500 mt-1">You must keep your camera and microphone <b>ON</b> at all times.</p></div>
-                   </div>
-                   <div className="flex gap-4 items-start">
-                       <div className="h-8 w-8 bg-red-50 text-red-600 rounded-full flex items-center justify-center font-bold flex-shrink-0">3</div>
-                       <div><h4 className="font-bold text-slate-800 text-sm">Professional Environment</h4><p className="text-xs text-slate-500 mt-1">Ensure you are in a quiet room with good lighting.</p></div>
-                   </div>
-               </div>
-
                <div className="p-6 bg-slate-50 border-t border-slate-100">
                    <button onClick={() => setShowRules(false)} className="w-full bg-slate-900 hover:bg-black text-white font-bold py-3.5 rounded-xl transition-all active:scale-95">I Understand & Agree</button>
                </div>
@@ -445,11 +472,67 @@ function CallingContent() {
         </div>
       )}
 
-      {/* FLOATING TOOLS */}
+      {/* TOOLS WINDOWS */}
       {activeTools.search && <DraggableWindow title="Google Search" icon={Globe} onClose={() => toggleTool('search')} initialPos={{ x: 50, y: 150 }}><form onSubmit={handleGoogleSearch} className="flex gap-2"><input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search topic..." className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" autoFocus /><button type="submit" className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700"><Search size={18} /></button></form></DraggableWindow>}
+      
       {activeTools.ai && <DraggableWindow title="Ask AI Assistant" icon={BrainCircuit} onClose={() => toggleTool('ai')} initialPos={{ x: 400, y: 150 }}><div className="flex gap-2 mb-4"><input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="e.g. React Hooks..." className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500" /><button onClick={handleAskAi} disabled={aiLoading} className="bg-violet-600 text-white p-2 rounded-lg hover:bg-violet-700 disabled:opacity-50">{aiLoading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send size={18} />}</button></div>{aiResponse && <div className="bg-violet-50 rounded-lg p-3 text-sm border border-violet-100"><p className="font-bold text-violet-800 mb-1">Q: {aiResponse.q}</p><p className="text-slate-700">{aiResponse.a}</p></div>}</DraggableWindow>}
+      
       {activeTools.questions && <DraggableWindow title="Question Bank" icon={BookOpen} onClose={() => toggleTool('questions')} initialPos={{ x: 50, y: 400 }}><div className="space-y-4"><div><label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Select Topic</label><div className="relative"><select value={selectedTopic} onChange={(e) => setSelectedTopic(e.target.value)} className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg p-2.5 focus:ring-emerald-500 focus:border-emerald-500 block">{Object.keys(QUESTION_BANK).map((topic) => (<option key={topic} value={topic}>{topic}</option>))}</select><div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500"><ChevronDown size={16} /></div></div></div><div className="space-y-2">{QUESTION_BANK[selectedTopic].map((item, idx) => (<div key={idx} className="border border-slate-100 rounded-lg overflow-hidden"><button onClick={() => setOpenQuestionId(openQuestionId === idx ? null : idx)} className="w-full flex justify-between items-center p-3 text-left bg-white hover:bg-slate-50 transition-colors"><span className="text-xs font-semibold text-slate-700">{item.q}</span>{openQuestionId === idx ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}</button>{openQuestionId === idx && (<div className="p-3 bg-emerald-50 text-xs text-slate-600 border-t border-slate-100"><strong className="text-emerald-700 block mb-1">Best Answer:</strong>{item.a}</div>)}</div>))}</div></div></DraggableWindow>}
-      {activeTools.feedback && <DraggableWindow title="Marking Sheet" icon={FileText} onClose={() => toggleTool('feedback')} initialPos={{ x: 800, y: 100 }}>{feedbackStep === 1 ? (<div className="text-center py-4"><p className="text-sm text-slate-500 mb-3">Fetching info for: <b>{roomId}</b></p><button onClick={handleFetchCandidate} disabled={fetchLoading} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold w-full">{fetchLoading ? "Loading..." : "Load Candidate"}</button></div>) : (<div className="space-y-3"><div className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg"><div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600"><User size={16}/></div><div><p className="text-sm font-bold text-slate-900">{candidateData?.applicantName}</p><p className="text-xs text-slate-500">{candidateData?.applicantEmail}</p></div></div><div className="space-y-2 max-h-[300px] overflow-y-auto">{questions.map((q) => (<div key={q.id} className="flex justify-between items-center text-sm border-b border-slate-50 pb-2"><span className="text-slate-700">{q.text}</span><div className="flex gap-1">{[2, 3, 4, 5].map(s => (<button key={s} onClick={() => setQuestions(prev => prev.map(qi => qi.id === q.id ? {...qi, score: s} : qi))} className={`w-6 h-6 rounded text-xs font-bold ${q.score === s ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{s}</button>))}</div></div>))}</div><div className="pt-2 border-t border-slate-100 flex justify-between items-center"><span className="font-bold text-lg text-slate-800">{questions.reduce((a,b)=>a+b.score,0)} / 30</span><button className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold">Submit</button></div></div>)}</DraggableWindow>}
+      
+      {/* FEEDBACK & MARKING TOOL */}
+      {activeTools.feedback && (
+        <DraggableWindow title="Marking Sheet" icon={FileText} onClose={() => toggleTool('feedback')} initialPos={{ x: 800, y: 100 }}>
+          {feedbackStep === 1 ? (
+            <div className="text-center py-4">
+              <p className="text-sm text-slate-500 mb-3">Fetching info for: <b>{roomId}</b></p>
+              <button onClick={handleFetchCandidate} disabled={fetchLoading} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold w-full transition-all hover:bg-slate-900 disabled:opacity-50">
+                {fetchLoading ? "Loading..." : "Load Candidate"}
+              </button>
+            </div>
+          ) : submitSuccess ? (
+             <div className="flex flex-col items-center justify-center py-6 text-emerald-600 animate-in fade-in zoom-in">
+                 <CheckCircle size={48} className="mb-2" />
+                 <p className="font-bold text-lg">Marks Submitted!</p>
+                 <p className="text-xs text-slate-500">Leaderboard updated.</p>
+             </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg">
+                <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600"><User size={16}/></div>
+                <div><p className="text-sm font-bold text-slate-900">{candidateData?.applicantName}</p><p className="text-xs text-slate-500">{candidateData?.applicantEmail}</p></div>
+              </div>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                {questions.map((q) => (
+                  <div key={q.id} className="flex justify-between items-center text-sm border-b border-slate-50 pb-2">
+                    <span className="text-slate-700">{q.text}</span>
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map(s => (
+                        <button key={s} onClick={() => setQuestions(prev => prev.map(qi => qi.id === q.id ? {...qi, score: s} : qi))} className={`w-6 h-6 rounded text-xs font-bold transition-all ${q.score === s ? 'bg-blue-600 text-white scale-110' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="pt-2 border-t border-slate-100 flex justify-between items-center">
+                <span className="font-bold text-lg text-slate-800">
+                  Total: {questions.reduce((a,b)=>a+b.score,0)} / 30
+                </span>
+                
+                {/* SUBMIT BUTTON */}
+                <button 
+                  onClick={handleSubmitFeedback} 
+                  disabled={submitLoading}
+                  className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  {submitLoading ? "Saving..." : "Submit Marks"}
+                </button>
+              </div>
+            </div>
+          )}
+        </DraggableWindow>
+      )}
 
     </main>
   );
@@ -458,7 +541,6 @@ function CallingContent() {
 // ==========================================
 // 4. EXPORT WITH SUSPENSE
 // ==========================================
-
 export default function CallingPage() {
   return (
     <Suspense fallback={<div className="flex items-center justify-center h-screen text-slate-500">Loading call...</div>}>

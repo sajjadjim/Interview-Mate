@@ -1,49 +1,83 @@
 import { NextResponse } from "next/server";
-import { getCollection } from "@/lib/dbConnect"; // Assuming you have this helper
-// If you use Mongoose directly, import dbConnect and the Model instead.
-import Review from "@/models/Review";
-import mongoose from "mongoose";
-
-// Connection helper (if you don't have one in @/lib/dbConnect)
-const MONGODB_URI = process.env.MONGODB_URI;
-if (!MONGODB_URI) {
-  throw new Error("Please define the MONGODB_URI environment variable");
-}
-
-async function connectDB() {
-  if (mongoose.connection.readyState >= 1) return;
-  return mongoose.connect(MONGODB_URI);
-}
-
-export async function GET() {
-  try {
-    await connectDB();
-    // Fetch only approved reviews, sort by newest
-    const reviews = await Review.find({ isApproved: true })
-      .sort({ createdAt: -1 })
-      .limit(10);
-    return NextResponse.json({ success: true, data: reviews });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-  }
-}
+import { getCollection } from "@/lib/dbConnect";
 
 export async function POST(request) {
   try {
-    await connectDB();
     const body = await request.json();
-    
-    // Basic validation
-    if (!body.name || !body.comment || !body.rating) {
+
+    // 1. Destructure the Interview Data
+    const { 
+      applicationId, 
+      roomId, 
+      candidateName, 
+      candidateEmail, 
+      interviewerEmail, 
+      interviewerName, 
+      score, 
+      breakdown
+    } = body;
+
+    // 2. Validation
+    if (score === undefined || score === null) {
       return NextResponse.json(
-        { success: false, message: "Missing fields" },
+        { message: "Score is required" }, 
         { status: 400 }
       );
     }
 
-    const newReview = await Review.create(body);
-    return NextResponse.json({ success: true, data: newReview }, { status: 201 });
+    // 3. Save to History (Reviews Collection)
+    // Using getCollection instead of Mongoose Model
+    const reviewsCollection = await getCollection("Reviews");
+    
+    const newReview = {
+      applicationId,
+      roomId,
+      candidateName,
+      candidateEmail,
+      interviewerName,
+      interviewerEmail,
+      score: Number(score),
+      maxScore: 30,
+      breakdown,
+      date: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const insertResult = await reviewsCollection.insertOne(newReview);
+
+    // 4. Update Leaderboard (Leaderboard Collection)
+    const leaderboardCollection = await getCollection("Leaderboard");
+
+    await leaderboardCollection.updateOne(
+      { applicantEmail: candidateEmail }, // Find student by email
+      {
+        $inc: { 
+            totalScoreAccumulated: Number(score), // Add new score to total
+            interviewsCount: 1                    // Add 1 to interview count
+        },
+        $set: { 
+            applicantName: candidateName,         // Update name
+            lastUpdated: new Date()               // Update time
+        }
+      },
+      { upsert: true } // Create if doesn't exist
+    );
+
+    return NextResponse.json(
+      { 
+        ok: true, 
+        message: "Marks saved & Leaderboard updated!", 
+        reviewId: insertResult.insertedId 
+      },
+      { status: 201 }
+    );
+
   } catch (error) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error("Error submitting review:", error);
+    return NextResponse.json(
+      { message: "Internal server error", error: error.message },
+      { status: 500 }
+    );
   }
 }
