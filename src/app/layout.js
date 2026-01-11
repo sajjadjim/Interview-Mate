@@ -15,7 +15,6 @@ export default function RootLayout({ children }) {
       <body className="min-h-screen flex flex-col">
         <AuthProvider>
           <Navbar />
-          
           <main className="flex-1">
             {children}
           </main>
